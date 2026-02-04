@@ -41,6 +41,14 @@
         <div><span class="label">Oleada</span></div>
         <div id="wave">1</div>
       </div>
+      <div class="stat">
+        <div><span class="label">Modo</span></div>
+        <div id="modeDisplay">Clásico</div>
+      </div>
+      <div class="stat">
+        <div><span class="label">Tiempo</span></div>
+        <div id="timeDisplay">∞</div>
+      </div>
       <div class="stat" style="width: 100%; margin-top: 8px;">
         <div style="font-size: 11px; color: var(--muted); margin-bottom: 4px;">Nitro</div>
         <div style="width: 100%; height: 8px; background: rgba(255,255,255,0.1); border-radius: 4px; overflow: hidden;">
@@ -81,6 +89,27 @@
         Conduce, derrapa y esquiva hordas de zombies.<br>
         ¡Power-ups, armas y mejoras permanentes!
       </p>
+
+      <div class="mode-selector" aria-label="Selector de modo de juego">
+        <h2>🎮 Modos de juego</h2>
+        <div class="mode-grid">
+          <button class="mode-card selected" data-mode="classic">
+            <h3>Clásico</h3>
+            <p>Oleadas infinitas, equilibrio estándar.</p>
+            <span class="mode-tag">Recomendado</span>
+          </button>
+          <button class="mode-card" data-mode="timeAttack">
+            <h3>Contrarreloj</h3>
+            <p>120 segundos para puntuar lo máximo.</p>
+            <span class="mode-tag">Score x1.3</span>
+          </button>
+          <button class="mode-card" data-mode="survival">
+            <h3>Supervivencia</h3>
+            <p>Más daño, menos power-ups. ¿Cuánto aguantas?</p>
+            <span class="mode-tag danger">Hardcore</span>
+          </button>
+        </div>
+      </div>
       
       <div class="menu-actions">
         <button class="btn primary large" id="startBtn">

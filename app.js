@@ -7,7 +7,7 @@
   console.log('🚀 Iniciando Car vs Zombies ULTRA...');
 
   // ========== CONFIGURACIÓN ==========
-  const CONFIG = {
+  const BASE_CONFIG = {
     ROAD_WIDTH: 18,
     MAX_SPEED: 0.48,
     ACCELERATION: 0.018,
@@ -15,6 +15,7 @@
     FRICTION: 0.975,
     LATERAL_FRICTION: 0.88,       // fricción lateral (menor = más drifting)
     TURN_SPEED: 0.028,
+    MAX_NITRO: 100,
     COLLISION_DIST: 1.88,
     DRIFT_THRESHOLD: 0.25,
     MAX_DUST_PARTICLES: 160,
@@ -26,6 +27,35 @@
     TREE_ROWS: 3,               // filas de árboles por lado
     TREE_SPACING: 12,
     LAMP_SPACING: 25,
+  };
+
+  const CONFIG = { ...BASE_CONFIG };
+
+  const MODES = {
+    classic: {
+      name: 'Clásico',
+      scoreMultiplier: 1,
+      timeLimit: null,
+      spawnRate: 1,
+      damageMultiplier: 1,
+      powerupRate: 1,
+    },
+    timeAttack: {
+      name: 'Contrarreloj',
+      scoreMultiplier: 1.3,
+      timeLimit: 120,
+      spawnRate: 1.2,
+      damageMultiplier: 1,
+      powerupRate: 1,
+    },
+    survival: {
+      name: 'Supervivencia',
+      scoreMultiplier: 1.1,
+      timeLimit: null,
+      spawnRate: 1.4,
+      damageMultiplier: 1.35,
+      powerupRate: 0.6,
+    },
   };
 
   // ========== TIPOS DE ZOMBIES ==========
@@ -62,10 +92,13 @@
   ];
 
   const SHOP_UPGRADES = {
-    maxHealth:      { name:'Vida Máxima',           baseCost:300, level:0, maxLevel:5, bonus:20  },
-    speed:          { name:'Velocidad',             baseCost:400, level:0, maxLevel:5, bonus:0.05},
-    armor:          { name:'Armadura',              baseCost:500, level:0, maxLevel:5, bonus:0.1 },
-    coinMultiplier: { name:'Multiplicador Monedas', baseCost:600, level:0, maxLevel:3, bonus:0.5 },
+    maxHealth:      { name:'Vida Máxima',           baseCost:300, level:0, maxLevel:5, bonus:20,  desc:'+20 HP por nivel' },
+    speed:          { name:'Velocidad',             baseCost:400, level:0, maxLevel:5, bonus:0.05, desc:'+5% velocidad máx.' },
+    handling:       { name:'Maniobrabilidad',       baseCost:350, level:0, maxLevel:5, bonus:0.07, desc:'+7% giro y grip' },
+    nitroTank:      { name:'Nitro Máximo',          baseCost:320, level:0, maxLevel:5, bonus:12,  desc:'+12 nitro por nivel' },
+    nitroRegen:     { name:'Recarga Nitro',         baseCost:380, level:0, maxLevel:5, bonus:0.12, desc:'Recarga más rápida' },
+    armor:          { name:'Armadura',              baseCost:500, level:0, maxLevel:5, bonus:0.1, desc:'-10% daño recibido' },
+    coinMultiplier: { name:'Multiplicador Monedas', baseCost:600, level:0, maxLevel:3, bonus:0.5, desc:'+50% monedas' },
   };
 
   const STORAGE_KEY = 'carVsZombies_playerData';
@@ -79,6 +112,8 @@
     kills:0, wave:1, zombiesKilledThisWave:0,
     powerups: new Map(),
     hasShield:false, hasTurbo:false, hasMagnet:false, hasWeapon:false,
+    mode: 'classic',
+    timeRemaining: null,
   };
 
   // Estado del coche con física real
@@ -90,6 +125,7 @@
     // Física mejorada
     wheelAngle: 0,             // ángulo actual de las ruedas delanteras
     targetWheelAngle: 0,       // ángulo objetivo
+    steerInput: 0,             // entrada suavizada de dirección
     driftAmount: 0,            // cantidad de drift activo (0-1)
     suspensionPhase: 0,        // fase de rebote de suspensión
     suspensionY: 0,            // desplazamiento vertical por suspensión
@@ -98,6 +134,7 @@
   let playerData = {
     totalCoins:0, ownedColors:[0], currentColorIndex:0,
     mouseSensitivity:1, bestScore:0, totalKills:0, gamesPlayed:0,
+    selectedMode:'classic',
     upgrades: JSON.parse(JSON.stringify(SHOP_UPGRADES)),
   };
 
@@ -109,12 +146,21 @@
         const loaded = JSON.parse(saved);
         playerData = { ...playerData, ...loaded };
         if(!playerData.upgrades) playerData.upgrades = JSON.parse(JSON.stringify(SHOP_UPGRADES));
+        Object.keys(SHOP_UPGRADES).forEach(key=>{
+          if(!playerData.upgrades[key]){
+            playerData.upgrades[key] = JSON.parse(JSON.stringify(SHOP_UPGRADES[key]));
+          }
+        });
       }
       if(mouseSensitivity) {
         mouseSensitivity.value = playerData.mouseSensitivity || 1;
         updateMouseSensitivityDisplay();
       }
+      if(playerData.selectedMode && MODES[playerData.selectedMode]){
+        gameState.mode = playerData.selectedMode;
+      }
       applyUpgrades();
+      updateModeUI();
     } catch(e){ console.warn('Error cargando datos:', e); }
   }
 
@@ -126,7 +172,15 @@
   function applyUpgrades(){
     const u = playerData.upgrades;
     gameState.maxHp = 100 + (u.maxHealth.level * u.maxHealth.bonus);
-    CONFIG.MAX_SPEED = 0.48 + (u.speed.level * u.speed.bonus);
+    CONFIG.MAX_SPEED = BASE_CONFIG.MAX_SPEED + (u.speed.level * u.speed.bonus);
+    CONFIG.TURN_SPEED = BASE_CONFIG.TURN_SPEED * (1 + u.handling.level * u.handling.bonus);
+    CONFIG.LATERAL_FRICTION = clamp(
+      BASE_CONFIG.LATERAL_FRICTION + (u.handling.level * 0.01),
+      0.82,
+      0.95
+    );
+    carState.maxNitro = BASE_CONFIG.MAX_NITRO + (u.nitroTank.level * u.nitroTank.bonus);
+    carState.nitro = Math.min(carState.nitro, carState.maxNitro);
   }
 
   // ========== UTILIDADES ==========
@@ -157,6 +211,8 @@
     coinsEl:            document.getElementById('coins'),
     comboEl:            document.getElementById('combo'),
     waveEl:             document.getElementById('wave'),
+    modeDisplay:        document.getElementById('modeDisplay'),
+    timeDisplay:        document.getElementById('timeDisplay'),
     nitroBar:           document.getElementById('nitroBar'),
     volMaster:          document.getElementById('volMaster'),
     volEngine:          document.getElementById('volEngine'),
@@ -176,6 +232,7 @@
     goKills:            document.getElementById('goKills'),
     goMaxCombo:         document.getElementById('goMaxCombo'),
     powerupContainer:   document.getElementById('powerupContainer'),
+    modeCards:          document.querySelectorAll('.mode-card'),
   };
 
   const { overlayMenu, overlayShop, overlayGameOver,
@@ -306,6 +363,43 @@
 
   elements.btnRestart.addEventListener('click', ()=>{ resetGame(); gameState.running=true; gameState.paused=false; });
 
+  function formatTime(seconds){
+    if(seconds === null) return '∞';
+    const clamped = Math.max(0, Math.ceil(seconds));
+    const mins = Math.floor(clamped / 60);
+    const secs = clamped % 60;
+    return `${mins}:${secs.toString().padStart(2,'0')}`;
+  }
+
+  function updateModeUI(){
+    const mode = MODES[gameState.mode] || MODES.classic;
+    if(elements.modeDisplay) elements.modeDisplay.textContent = mode.name;
+    if(elements.timeDisplay){
+      const displayTime = gameState.timeRemaining ?? mode.timeLimit;
+      elements.timeDisplay.textContent = formatTime(displayTime);
+    }
+    if(elements.modeCards){
+      elements.modeCards.forEach(card=>{
+        const selected = card.dataset.mode === gameState.mode;
+        card.classList.toggle('selected', selected);
+      });
+    }
+  }
+
+  function setGameMode(modeKey){
+    if(!MODES[modeKey]) return;
+    gameState.mode = modeKey;
+    playerData.selectedMode = modeKey;
+    updateModeUI();
+    savePlayerData();
+  }
+
+  if(elements.modeCards){
+    elements.modeCards.forEach(card=>{
+      card.addEventListener('click', ()=> setGameMode(card.dataset.mode));
+    });
+  }
+
   // ========== TIENDA ==========
   function renderShop(){
     elements.shopGrid.innerHTML='';
@@ -330,7 +424,12 @@
         const card=document.createElement('div'); card.className='upgrade-card';
         const cost=upgrade.baseCost*Math.pow(1.5,upgrade.level);
         const isMaxed=upgrade.level>=upgrade.maxLevel;
-        card.innerHTML=`<div class="upgrade-name">${upgrade.name}</div><div class="upgrade-level">Nivel ${upgrade.level}/${upgrade.maxLevel}</div><div class="upgrade-price">${isMaxed?'✓ MÁXIMO':'💰 '+Math.floor(cost)}</div>`;
+        card.innerHTML=`
+          <div class="upgrade-name">${upgrade.name}</div>
+          <div class="upgrade-level">Nivel ${upgrade.level}/${upgrade.maxLevel}</div>
+          <div class="upgrade-desc">${upgrade.desc || ''}</div>
+          <div class="upgrade-price">${isMaxed?'✓ MÁXIMO':'💰 '+Math.floor(cost)}</div>
+        `;
         if(!isMaxed){ card.style.cursor='pointer'; card.addEventListener('click',()=>handleUpgradeClick(key,upgrade,cost)); }
         else card.classList.add('maxed');
         elements.upgradesGrid.appendChild(card);
@@ -385,6 +484,8 @@
   let envChunks  = [];    // árboles, postes, edificios a los lados
   let groundChunks = [];  // segmentos de suelo verde
   let mountainRing = []; // montañas que se mueven con parallax
+  let clouds = [];
+  let skyDome = null;
 
   // Ruedas delanteras (referencia para girarlas)
   let frontWheels = [];
@@ -409,6 +510,9 @@
       scene = new THREE.Scene();
       scene.background = new THREE.Color(0x87ceeb);
       scene.fog = new THREE.FogExp2(0x87ceeb, 0.006);
+
+      skyDome = createSkyDome();
+      scene.add(skyDome);
 
       camera = new THREE.PerspectiveCamera(65, window.innerWidth/window.innerHeight, 0.1, 600);
       camera.position.set(0,8,20);
@@ -463,6 +567,7 @@
   // ========== MUNDO INFINITO ==========
   // Materiales compartidos (se crean una vez)
   let matRoad, matSide, matLine, matGround, matTree, matTrunk, matLampPost, matLampLight, matBuilding;
+  let matRock, matBush, matBillboard, matCloud;
 
   function initWorldMaterials(){
     // Carretera asfalto oscuro
@@ -481,6 +586,11 @@
     matLampLight = new THREE.MeshBasicMaterial({ color:0xffeeaa });
     // Edificios
     matBuilding  = new THREE.MeshStandardMaterial({ color:0x3a3a4a, roughness:0.8 });
+    // Rocas y arbustos
+    matRock = new THREE.MeshStandardMaterial({ color:0x4b4b50, roughness:0.9 });
+    matBush = new THREE.MeshStandardMaterial({ color:0x1f5f2b, roughness:0.95 });
+    matBillboard = new THREE.MeshStandardMaterial({ color:0x222831, roughness:0.6, metalness:0.2 });
+    matCloud = new THREE.MeshLambertMaterial({ color:0xffffff, transparent:true, opacity:0.85, depthWrite:false });
   }
 
   function buildInfiniteWorld(){
@@ -520,6 +630,18 @@
       m.position.set(Math.cos(angle)*350, 0, Math.sin(angle)*350);
       scene.add(m);
       mountainRing.push(m);
+    }
+
+    // Crear nubes decorativas
+    for(let i=0; i<18; i++){
+      const cloud = createCloud();
+      cloud.position.set(
+        (Math.random()-0.5)*260,
+        35 + Math.random()*25,
+        (Math.random()-0.5)*260
+      );
+      scene.add(cloud);
+      clouds.push(cloud);
     }
 
     console.log('🌍 Mundo infinito construido');
@@ -611,6 +733,33 @@
       }
     });
 
+    // --- Rocas y arbustos cercanos ---
+    sides.forEach(side=>{
+      for(let z=-L/2+10; z<L/2; z+=18){
+        if(Math.random()<0.55){
+          const rock = createRock();
+          rock.position.set(side*(halfW+6+Math.random()*3), 0, z+(Math.random()-0.5)*6);
+          g.add(rock);
+        }
+        if(Math.random()<0.4){
+          const bush = createBush();
+          bush.position.set(side*(halfW+8+Math.random()*4), 0, z+(Math.random()-0.5)*6);
+          g.add(bush);
+        }
+      }
+    });
+
+    // --- Carteles ocasionales ---
+    sides.forEach(side=>{
+      for(let z=-L/2+40; z<L/2; z+=90){
+        if(Math.random()<0.35){
+          const sign = createBillboard();
+          sign.position.set(side*(halfW+16), 0, z+(Math.random()-0.5)*10);
+          g.add(sign);
+        }
+      }
+    });
+
     return g;
   }
 
@@ -696,6 +845,45 @@
     return g;
   }
 
+  // --- Rocas decorativas ---
+  function createRock(){
+    const g = new THREE.Group();
+    const w = 0.8 + Math.random()*1.6;
+    const h = 0.4 + Math.random()*0.9;
+    const d = 0.6 + Math.random()*1.2;
+    const rock = new THREE.Mesh(new THREE.DodecahedronGeometry(1, 0), matRock);
+    rock.scale.set(w, h, d);
+    rock.position.y = h * 0.5;
+    rock.castShadow = true;
+    rock.receiveShadow = true;
+    g.add(rock);
+    return g;
+  }
+
+  // --- Arbustos ---
+  function createBush(){
+    const bush = new THREE.Mesh(new THREE.SphereGeometry(1.2, 7, 7), matBush);
+    bush.scale.set(1 + Math.random()*0.6, 0.7 + Math.random()*0.4, 1 + Math.random()*0.6);
+    bush.castShadow = true;
+    bush.receiveShadow = true;
+    bush.position.y = 0.6;
+    return bush;
+  }
+
+  // --- Cartel publicitario ---
+  function createBillboard(){
+    const g = new THREE.Group();
+    const base = new THREE.Mesh(new THREE.BoxGeometry(3, 0.4, 0.4), matBillboard);
+    base.position.y = 1.8;
+    const pole = new THREE.Mesh(new THREE.CylinderGeometry(0.12, 0.15, 3, 6), matBillboard);
+    pole.position.y = 1.4;
+    const panel = new THREE.Mesh(new THREE.BoxGeometry(4.5, 2, 0.2), matBillboard.clone());
+    panel.position.y = 3;
+    panel.material.color.setHSL(0.08 + Math.random()*0.08, 0.2, 0.25);
+    g.add(base, pole, panel);
+    return g;
+  }
+
   // --- Montaña (horizonte) ---
   function createMountain(){
     const g = new THREE.Group();
@@ -710,6 +898,39 @@
     cone.rotation.y = Math.random()*Math.PI;
     cone.castShadow=true;
     g.add(cone);
+    return g;
+  }
+
+  // --- Cúpula de cielo con gradiente ---
+  function createSkyDome(){
+    const canvas = document.createElement('canvas');
+    canvas.width = 16;
+    canvas.height = 256;
+    const ctx = canvas.getContext('2d');
+    const grad = ctx.createLinearGradient(0, 0, 0, canvas.height);
+    grad.addColorStop(0, '#0b1420');
+    grad.addColorStop(0.4, '#3b7aa5');
+    grad.addColorStop(1, '#8fd3ff');
+    ctx.fillStyle = grad;
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    const texture = new THREE.CanvasTexture(canvas);
+    const mat = new THREE.MeshBasicMaterial({ map: texture, side: THREE.BackSide });
+    const dome = new THREE.Mesh(new THREE.SphereGeometry(500, 32, 32), mat);
+    dome.position.set(0, 50, 0);
+    return dome;
+  }
+
+  // --- Nube simple ---
+  function createCloud(){
+    const g = new THREE.Group();
+    const puffCount = 3 + Math.floor(Math.random()*3);
+    for(let i=0;i<puffCount;i++){
+      const puff = new THREE.Mesh(new THREE.SphereGeometry(3+Math.random()*2.5, 8, 8), matCloud);
+      puff.position.set((Math.random()-0.5)*6, Math.random()*2, (Math.random()-0.5)*6);
+      g.add(puff);
+    }
+    g.scale.setScalar(0.6 + Math.random()*0.7);
+    g.userData.speed = 0.2 + Math.random()*0.3;
     return g;
   }
 
@@ -995,12 +1216,16 @@
     if(mouseActive && Math.abs(mouseX)>0.05) steerInput += mouseX * playerData.mouseSensitivity;
     steerInput = clamp(steerInput, -1, 1);
 
+    // Suavizado de entrada de dirección para mayor estabilidad
+    const steerSmoothing = 1 - Math.pow(0.001, dt * 60);
+    carState.steerInput = lerp(carState.steerInput, steerInput, steerSmoothing);
+
     // Ángulo máximo de las ruedas (se reduce a alta velocidad para estabilidad)
     const speed = carState.velocity.length();
     const speedNorm = clamp(speed / CONFIG.MAX_SPEED, 0, 1);
     const maxSteer = Math.PI/6 * (1 - speedNorm*0.45); // se reduce hasta 55% a máx velocidad
 
-    carState.targetWheelAngle = steerInput * maxSteer;
+    carState.targetWheelAngle = carState.steerInput * maxSteer;
     // Suavizar giro de ruedas
     carState.wheelAngle = lerp(carState.wheelAngle, carState.targetWheelAngle, dt*8);
 
@@ -1013,7 +1238,8 @@
       maxSpeed *= 1.55;
       if(nitro) carState.nitro = Math.max(0, carState.nitro - dt*28);
     } else {
-      carState.nitro = Math.min(carState.maxNitro, carState.nitro + dt*8);
+      const regenBoost = 1 + (playerData.upgrades.nitroRegen.level * playerData.upgrades.nitroRegen.bonus);
+      carState.nitro = Math.min(carState.maxNitro, carState.nitro + dt*8*regenBoost);
     }
 
     // Vector de dirección del coche
@@ -1050,7 +1276,10 @@
     // Aplicar fricción separada
     const velFrontFriced = velForward.multiplyScalar(Math.pow(frontFric, dt*60));
     const velLatFriced   = velLateral.multiplyScalar(Math.pow(latFric, dt*60));
-    carState.velocity.copy(velFrontFriced).add(velLatFriced);
+
+    // Tracción extra a alta velocidad para mantener control
+    const tractionAssist = clamp(1 - speedNorm * 0.25, 0.72, 1);
+    carState.velocity.copy(velFrontFriced).add(velLatFriced.multiplyScalar(tractionAssist));
 
     // Limitar velocidad máxima
     if(carState.velocity.length() > maxSpeed){
@@ -1070,7 +1299,7 @@
 
     // --- Inclinación visual del coche ---
     // Roll en curvas (inclinación lateral)
-    const targetRoll = -steerInput * 0.18 * speedNorm;
+    const targetRoll = -carState.steerInput * 0.18 * speedNorm;
     car.rotation.z = lerp(car.rotation.z, targetRoll, dt*7);
 
     // Pitch al acelerar/frenar
@@ -1169,7 +1398,8 @@
         if(!z.userData.hitCooldown || now-z.userData.hitCooldown>1000){
           z.userData.hitCooldown = now;
           if(!gameState.hasShield){
-            const dmg = z.userData.type.damage*(1-(playerData.upgrades.armor.level*0.1));
+            const mode = MODES[gameState.mode] || MODES.classic;
+            const dmg = z.userData.type.damage*(1-(playerData.upgrades.armor.level*0.1))*mode.damageMultiplier;
             gameState.hp -= dmg;
             gameState.combo=0; gameState.comboTimer=0;
             gameState.score = Math.max(0, gameState.score-6);
@@ -1223,7 +1453,10 @@
     return 3;
   }
 
-  function addScore(pts){ gameState.score+=pts; }
+  function addScore(pts){
+    const mode = MODES[gameState.mode] || MODES.classic;
+    gameState.score += pts * mode.scoreMultiplier;
+  }
   function addCoins(coins){
     const mult=1+(playerData.upgrades.coinMultiplier.level*0.5);
     playerData.totalCoins+=Math.floor(coins*mult);
@@ -1420,13 +1653,16 @@
       else if(wave<=10){  spawnDelay=Math.max(800,1400-(wave-5)*100); maxZombies=12+(wave-5)*1.5; zombieSpeedMult=1.0+(wave-5)*0.08; }
       else {              spawnDelay=Math.max(500,800-(wave-10)*30);  maxZombies=Math.min(35,18+(wave-10)*1.2); zombieSpeedMult=1.4+(wave-10)*0.05; }
 
+      const mode = MODES[gameState.mode] || MODES.classic;
+      spawnDelay = spawnDelay / mode.spawnRate;
+
       if(now-gameState.lastSpawn>spawnDelay){
         if(zombies.length<maxZombies) spawnZombie();
         gameState.lastSpawn=now;
       }
 
       // Power-ups
-      if(Math.random()<0.0009 && powerups.length<3) spawnPowerup();
+      if(Math.random()<0.0009*mode.powerupRate && powerups.length<3) spawnPowerup();
 
       // Updates
       updateCarPhysics(dt);
@@ -1443,6 +1679,17 @@
       if(gameState.combo>0){
         gameState.comboTimer+=dt;
         if(gameState.comboTimer>3){ gameState.combo=0; gameState.comboTimer=0; }
+      }
+
+      // Temporizador por modo
+      if(mode.timeLimit){
+        if(gameState.timeRemaining === null) gameState.timeRemaining = mode.timeLimit;
+        gameState.timeRemaining -= dt;
+        if(gameState.timeRemaining <= 0){
+          gameState.timeRemaining = 0;
+          gameState.running = false;
+          showGameOver();
+        }
       }
 
       // Oleadas
@@ -1464,6 +1711,14 @@
       const t=performance.now()*0.00012;
       sun.position.set(100*Math.cos(t), 80+10*Math.sin(t*0.7), 60+20*Math.sin(t*0.4));
       sunMesh.position.copy(sun.position);
+    }
+
+    // Nubes en movimiento lento
+    if(clouds.length){
+      clouds.forEach(cloud=>{
+        cloud.position.x += cloud.userData.speed * dt * 4;
+        if(cloud.position.x > 140) cloud.position.x = -140;
+      });
     }
 
     // Cámara
@@ -1491,6 +1746,10 @@
         camShake.decay-=dt*1000;
       }
       camera.lookAt(lookAt);
+      if(skyDome){
+        skyDome.position.x = car.position.x;
+        skyDome.position.z = car.position.z;
+      }
     }
 
     // HUD
@@ -1501,6 +1760,11 @@
       else elements.comboEl.style.display='none';
     }
     if(elements.waveEl) elements.waveEl.textContent=`Oleada ${gameState.wave}`;
+    if(elements.timeDisplay){
+      const mode = MODES[gameState.mode] || MODES.classic;
+      const displayTime = gameState.timeRemaining ?? mode.timeLimit;
+      elements.timeDisplay.textContent = formatTime(displayTime);
+    }
     if(elements.nitroBar) elements.nitroBar.style.width=(carState.nitro/carState.maxNitro*100)+'%';
     coinsEl.textContent = playerData.totalCoins + Math.floor(gameState.score/100);
 
@@ -1522,6 +1786,8 @@
     gameState.lastSpawn=performance.now();
     gameState.powerups.clear();
     gameState.hasShield=false; gameState.hasTurbo=false; gameState.hasMagnet=false; gameState.hasWeapon=false;
+    const mode = MODES[gameState.mode] || MODES.classic;
+    gameState.timeRemaining = mode.timeLimit;
 
     carState.nitro=carState.maxNitro;
     if(!carState.velocity) carState.velocity=new THREE.Vector3();
@@ -1548,6 +1814,7 @@
     overlayMenu.style.display='none'; overlayShop.style.display='none'; overlayGameOver.style.display='none';
     if(!audioCtx) initAudio();
     updateAudioGains();
+    updateModeUI();
     gameState.lastTime=performance.now();
     mouseActive=false;
     playerData.gamesPlayed++; savePlayerData();
