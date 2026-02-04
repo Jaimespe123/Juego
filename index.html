@@ -42,6 +42,14 @@
         <div id="wave">1</div>
       </div>
       <div class="stat">
+        <div><span class="label">Arma</span></div>
+        <div id="weaponStatus">Sin arma</div>
+      </div>
+      <div class="stat">
+        <div><span class="label">Munición</span></div>
+        <div id="ammo">0</div>
+      </div>
+      <div class="stat">
         <div><span class="label">Modo</span></div>
         <div id="modeDisplay">Clásico</div>
       </div>
@@ -60,6 +68,14 @@
     <!-- Power-ups activos -->
     <div id="powerupContainer" style="position: absolute; left: 12px; top: 280px; z-index: 40; display: flex; flex-direction: column; gap: 8px;">
       <!-- Los power-ups activos aparecerán aquí -->
+    </div>
+
+    <!-- Barra de jefe -->
+    <div id="bossBar" aria-label="Vida del jefe" style="display:none;">
+      <div class="boss-label">👹 JEFE</div>
+      <div class="boss-bar-track">
+        <div id="bossBarFill"></div>
+      </div>
     </div>
 
     <!-- Mini-mapa -->
@@ -124,6 +140,9 @@
         <button class="btn large" id="openLeaderboard">
           🏆 Clasificación
         </button>
+        <button class="btn large" id="openTutorial">
+          🎓 Tutorial interactivo
+        </button>
         <button class="btn large" id="openSettings">
           ⚙️ Ajustes
         </button>
@@ -138,6 +157,7 @@
           <li><kbd>Shift</kbd> – Freno de mano</li>
           <li><kbd>N</kbd> – Nitro (se recarga)</li>
           <li><kbd>E</kbd> o <kbd>Click</kbd> – Disparar (con arma)</li>
+          <li><kbd>Q</kbd> – Cambiar arma</li>
         </ul>
       </div>
       
@@ -315,6 +335,68 @@
             <strong>⚠️ ¡CUIDADO!</strong> Explota al morir o al chocar. Mantén tu distancia o usa el escudo.
           </p>
         </div>
+
+        <!-- Zombie Escupidor -->
+        <div class="zombie-info-card" style="border-color: #55ddff;">
+          <div class="zombie-icon" style="background: #55ddff; color: #000;">🧪</div>
+          <h3 style="color: #55ddff;">Zombie Escupidor</h3>
+          <div class="zombie-stats">
+            <div class="stat-row">
+              <span class="stat-label">Velocidad:</span>
+              <span class="stat-value">⭐⭐</span>
+            </div>
+            <div class="stat-row">
+              <span class="stat-label">Vida:</span>
+              <span class="stat-value">⭐⭐</span>
+            </div>
+            <div class="stat-row">
+              <span class="stat-label">Daño:</span>
+              <span class="stat-value">10 HP</span>
+            </div>
+            <div class="stat-row">
+              <span class="stat-label">Puntos:</span>
+              <span class="stat-value">30 pts</span>
+            </div>
+            <div class="stat-row">
+              <span class="stat-label">Monedas:</span>
+              <span class="stat-value">💰 3</span>
+            </div>
+          </div>
+          <p class="zombie-desc">
+            Ataca a distancia con proyectiles tóxicos. Evita quedarte quieto.
+          </p>
+        </div>
+
+        <!-- Zombie Acechador -->
+        <div class="zombie-info-card" style="border-color: #7d2eff;">
+          <div class="zombie-icon" style="background: #7d2eff;">👁️</div>
+          <h3 style="color: #7d2eff;">Zombie Acechador</h3>
+          <div class="zombie-stats">
+            <div class="stat-row">
+              <span class="stat-label">Velocidad:</span>
+              <span class="stat-value">⭐⭐⭐⭐</span>
+            </div>
+            <div class="stat-row">
+              <span class="stat-label">Vida:</span>
+              <span class="stat-value">⭐⭐</span>
+            </div>
+            <div class="stat-row">
+              <span class="stat-label">Daño:</span>
+              <span class="stat-value">14 HP</span>
+            </div>
+            <div class="stat-row">
+              <span class="stat-label">Puntos:</span>
+              <span class="stat-value">35 pts</span>
+            </div>
+            <div class="stat-row">
+              <span class="stat-label">Monedas:</span>
+              <span class="stat-value">💰 4</span>
+            </div>
+          </div>
+          <p class="zombie-desc">
+            Se camufla al acercarse. Mantén distancia y vigila el minimapa.
+          </p>
+        </div>
       </div>
 
       <div class="zombie-tips">
@@ -324,6 +406,8 @@
           <li><strong>Zombies Rápidos:</strong> Prioriza esquivarlos, valen muchos puntos</li>
           <li><strong>Zombies Tanque:</strong> Usa el arma o evítalos si no tienes escudo</li>
           <li><strong>Zombies Explosivos:</strong> ¡NUNCA los mates de frente! Usa el arma desde lejos</li>
+          <li><strong>Zombies Escupidores:</strong> Muévete en zig-zag para esquivar sus proyectiles</li>
+          <li><strong>Zombies Acechadores:</strong> Usa el minimapa y mantén la distancia</li>
         </ul>
       </div>
 
@@ -353,6 +437,25 @@
       </div>
     </section>
 
+    <!-- TUTORIAL INTERACTIVO -->
+    <section id="overlayTutorial" class="overlay" style="display:none; max-width: 700px;" role="dialog" aria-labelledby="tutorialTitle" aria-modal="true">
+      <h1 id="tutorialTitle">🎓 Tutorial Interactivo</h1>
+      <p style="color: var(--muted); font-size: 14px; margin-bottom: 20px;">
+        Completa los pasos para dominar el juego.
+      </p>
+      <ol id="tutorialSteps" class="tutorial-steps">
+        <!-- Pasos dinámicos -->
+      </ol>
+      <div class="shop-actions">
+        <button class="btn primary large" id="startTutorial">
+          ▶️ Iniciar Tutorial
+        </button>
+        <button class="btn large" id="backFromTutorial">
+          ◀️ Volver al Menú
+        </button>
+      </div>
+    </section>
+
     <!-- GAME OVER -->
     <section id="overlayGameOver" class="overlay" style="display:none" role="dialog" aria-labelledby="goTitle" aria-modal="true">
       <h1 id="goTitle">Game Over</h1>
@@ -369,6 +472,15 @@
         </p>
         <p style="color: var(--muted); font-size: 14px;">
           🔥 Combo máximo: <strong id="goMaxCombo" style="color: #ff6600;">x1</strong>
+        </p>
+        <p style="color: var(--muted); font-size: 14px;">
+          ⏱️ Tiempo sobrevivido: <strong id="goTime" style="color: #ff6600;">0s</strong>
+        </p>
+        <p style="color: var(--muted); font-size: 14px;">
+          🏎️ Velocidad máxima: <strong id="goTopSpeed" style="color: #ff6600;">0 km/h</strong>
+        </p>
+        <p style="color: var(--muted); font-size: 14px;">
+          🎯 Precisión: <strong id="goAccuracy" style="color: #ff6600;">0%</strong>
         </p>
       </div>
       
@@ -463,6 +575,18 @@
 
     <!-- Mensaje flotante en juego -->
     <div id="inGameMsg" role="status" aria-live="polite"></div>
+
+    <!-- Controles táctiles -->
+    <div id="touchControls" aria-hidden="true">
+      <div id="joystickLeft" class="joystick">
+        <div class="joystick-base"></div>
+        <div class="joystick-stick"></div>
+      </div>
+      <div id="joystickRight" class="joystick">
+        <div class="joystick-base"></div>
+        <div class="joystick-stick"></div>
+      </div>
+    </div>
 
     <!-- Footer informativo -->
     <footer id="footer">

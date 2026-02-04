@@ -58,13 +58,23 @@
     },
   };
 
+  const EVENTS = [
+    { key:'fog', name:'Niebla densa', duration:16000 },
+    { key:'storm', name:'Tormenta eléctrica', duration:14000 },
+    { key:'mega', name:'Mega horda', duration:12000 },
+  ];
+
   // ========== TIPOS DE ZOMBIES ==========
   const ZOMBIE_TYPES = {
     NORMAL:    { name:'Normal',    color:0x2d5a2d, speed:1.0,  health:1, damage:12, points:10, coins:1, size:1.0 },
     FAST:      { name:'Rápido',   color:0xff6600, speed:1.8,  health:1, damage:8,  points:20, coins:2, size:0.8 },
     TANK:      { name:'Tanque',   color:0x8b0000, speed:0.6,  health:3, damage:25, points:50, coins:5, size:1.5 },
     EXPLOSIVE: { name:'Explosivo',color:0xffff00, speed:1.2,  health:1, damage:30, points:40, coins:3, size:1.1, explosive:true },
+    SPITTER:   { name:'Escupidor',color:0x55ddff, speed:0.9,  health:2, damage:10, points:30, coins:3, size:1.1, ranged:true },
+    STALKER:   { name:'Acechador',color:0x7d2eff, speed:1.4,  health:2, damage:14, points:35, coins:4, size:1.0, stealth:true },
   };
+
+  const BOSS_TYPE = { name:'Jefe Brutal', color:0xff3b3b, speed:0.6, health:18, damage:35, points:250, coins:20, size:2.4, boss:true, ranged:true };
 
   // ========== POWER-UPS ==========
   const POWERUP_TYPES = {
@@ -74,6 +84,12 @@
     MAGNET: { name:'Imán',  color:0xffdd00, icon:'🧲',  duration:10000, effect:'magnet' },
     WEAPON: { name:'Arma',  color:0xff0000, icon:'🔫',  duration:15000, effect:'weapon' },
   };
+
+  const WEAPON_TYPES = [
+    { key:'pistol', name:'Pistola', ammo:18, fireRate:0.25, damage:1, spread:0.02 },
+    { key:'shotgun', name:'Escopeta', ammo:8, fireRate:0.8, damage:2, spread:0.18, pellets:5 },
+    { key:'rifle', name:'Rifle', ammo:30, fireRate:0.12, damage:1, spread:0.04 },
+  ];
 
   // ========== TIENDA ==========
   const SHOP_COLORS = [
@@ -122,6 +138,17 @@
     magnetRange: 10,
     shieldDurationBonus: 0,
     weaponDurationBonus: 0,
+    currentWeapon: null,
+    ammo: 0,
+    lastShotAt: 0,
+    shotsFired: 0,
+    shotsHit: 0,
+    timeSurvived: 0,
+    topSpeed: 0,
+    activeBoss: null,
+    activeEvent: null,
+    eventEndsAt: 0,
+    lastBossWave: 0,
   };
 
   // Estado del coche con física real
@@ -209,6 +236,7 @@
   function logErr(e){ console.error(e); inGameMessage('Error: '+(e?.message||e)); }
   function clamp(v,a,b){ return Math.max(a,Math.min(b,v)); }
   function lerp(a,b,t){ return a+(b-a)*t; }
+  function randRange(min,max){ return min+Math.random()*(max-min); }
 
   // ========== DOM ==========
   const elements = {
@@ -233,6 +261,8 @@
     coinsEl:            document.getElementById('coins'),
     comboEl:            document.getElementById('combo'),
     waveEl:             document.getElementById('wave'),
+    weaponStatus:       document.getElementById('weaponStatus'),
+    ammoEl:             document.getElementById('ammo'),
     modeDisplay:        document.getElementById('modeDisplay'),
     timeDisplay:        document.getElementById('timeDisplay'),
     nitroBar:           document.getElementById('nitroBar'),
@@ -253,8 +283,22 @@
     goCoins:            document.getElementById('goCoins'),
     goKills:            document.getElementById('goKills'),
     goMaxCombo:         document.getElementById('goMaxCombo'),
+    goTime:             document.getElementById('goTime'),
+    goTopSpeed:         document.getElementById('goTopSpeed'),
+    goAccuracy:         document.getElementById('goAccuracy'),
     powerupContainer:   document.getElementById('powerupContainer'),
     modeCards:          document.querySelectorAll('.mode-card'),
+    bossBar:            document.getElementById('bossBar'),
+    bossBarFill:        document.getElementById('bossBarFill'),
+    openLeaderboard:    document.getElementById('openLeaderboard'),
+    leaderboardContent: document.getElementById('leaderboardContent'),
+    openTutorial:       document.getElementById('openTutorial'),
+    overlayTutorial:    document.getElementById('overlayTutorial'),
+    tutorialSteps:      document.getElementById('tutorialSteps'),
+    startTutorial:      document.getElementById('startTutorial'),
+    backFromTutorial:   document.getElementById('backFromTutorial'),
+    joystickLeft:       document.getElementById('joystickLeft'),
+    joystickRight:      document.getElementById('joystickRight'),
   };
 
   const { overlayMenu, overlayShop, overlayGameOver,
@@ -385,6 +429,66 @@
 
   elements.btnRestart.addEventListener('click', ()=>{ resetGame(); gameState.running=true; gameState.paused=false; });
 
+  // Tutorial
+  const tutorialFlow = [
+    { id:'move', text:'Muévete usando WASD o el joystick.', done:false },
+    { id:'drift', text:'Derrapa con Shift o freno de mano.', done:false },
+    { id:'nitro', text:'Activa el nitro con N.', done:false },
+    { id:'powerup', text:'Recoge un power-up.', done:false },
+    { id:'shoot', text:'Dispara con E o click.', done:false },
+  ];
+  let tutorialActive = false;
+
+  function renderTutorial(){
+    if(!elements.tutorialSteps) return;
+    elements.tutorialSteps.innerHTML = tutorialFlow.map(step=>{
+      const cls = step.done ? 'done' : '';
+      return `<li class="${cls}">${step.text}</li>`;
+    }).join('');
+  }
+
+  function startTutorialMode(){
+    tutorialFlow.forEach(step=>step.done=false);
+    tutorialActive = true;
+    renderTutorial();
+    setGameMode('classic');
+    startGame();
+    inGameMessage('🎓 Tutorial iniciado. ¡Completa los pasos!', 2500);
+  }
+
+  function markTutorialStep(id){
+    if(!tutorialActive) return;
+    const step = tutorialFlow.find(s=>s.id===id);
+    if(step && !step.done){
+      step.done = true;
+      renderTutorial();
+      if(tutorialFlow.every(s=>s.done)){
+        tutorialActive = false;
+        inGameMessage('✅ Tutorial completado', 2000);
+      }
+    }
+  }
+
+  if(elements.openTutorial){
+    elements.openTutorial.addEventListener('click', ()=>{
+      overlayMenu.style.display='none';
+      if(elements.overlayTutorial) elements.overlayTutorial.style.display='block';
+      renderTutorial();
+    });
+  }
+  if(elements.backFromTutorial){
+    elements.backFromTutorial.addEventListener('click', ()=>{
+      if(elements.overlayTutorial) elements.overlayTutorial.style.display='none';
+      overlayMenu.style.display='block';
+    });
+  }
+  if(elements.startTutorial){
+    elements.startTutorial.addEventListener('click', ()=>{
+      if(elements.overlayTutorial) elements.overlayTutorial.style.display='none';
+      startTutorialMode();
+    });
+  }
+
   function formatTime(seconds){
     if(seconds === null) return '∞';
     const clamped = Math.max(0, Math.ceil(seconds));
@@ -419,6 +523,66 @@
   if(elements.modeCards){
     elements.modeCards.forEach(card=>{
       card.addEventListener('click', ()=> setGameMode(card.dataset.mode));
+    });
+  }
+
+  // ========== LEADERBOARD ==========
+  const LEADERBOARD_KEY = 'carVsZombies_leaderboard';
+  function loadLeaderboard(){
+    try {
+      const saved = localStorage.getItem(LEADERBOARD_KEY);
+      return saved ? JSON.parse(saved) : [];
+    } catch(e){ return []; }
+  }
+
+  function saveLeaderboard(entries){
+    try { localStorage.setItem(LEADERBOARD_KEY, JSON.stringify(entries)); }
+    catch(e){ console.warn('Error guardando leaderboard:', e); }
+  }
+
+  function updateLeaderboard(newEntry){
+    const entries = loadLeaderboard();
+    entries.push(newEntry);
+    entries.sort((a,b)=>b.score-a.score);
+    saveLeaderboard(entries.slice(0,10));
+  }
+
+  function renderLeaderboard(){
+    if(!elements.leaderboardContent) return;
+    const entries = loadLeaderboard();
+    if(!entries.length){
+      elements.leaderboardContent.innerHTML = '<div class="leaderboard-empty">Aún no hay puntuaciones.</div>';
+      return;
+    }
+    elements.leaderboardContent.innerHTML = entries.map((entry, idx)=>{
+      const rankClass = idx===0?'gold':idx===1?'silver':idx===2?'bronze':'';
+      return `
+        <div class="leaderboard-entry">
+          <div class="rank ${rankClass}">#${idx+1}</div>
+          <div class="player-info">
+            <div class="score">${Math.floor(entry.score)} pts</div>
+            <div class="details">Kills: ${entry.kills} • Tiempo: ${entry.time}s</div>
+          </div>
+          <div class="date">${entry.date}</div>
+        </div>
+      `;
+    }).join('');
+  }
+
+  if(elements.openLeaderboard){
+    elements.openLeaderboard.addEventListener('click', ()=>{
+      overlayMenu.style.display='none';
+      elements.overlayLeaderboard = document.getElementById('overlayLeaderboard');
+      if(elements.overlayLeaderboard) elements.overlayLeaderboard.style.display='block';
+      renderLeaderboard();
+    });
+  }
+
+  const backFromLeaderboard = document.getElementById('backFromLeaderboard');
+  if(backFromLeaderboard){
+    backFromLeaderboard.addEventListener('click', ()=>{
+      if(elements.overlayLeaderboard) elements.overlayLeaderboard.style.display='none';
+      overlayMenu.style.display='block';
     });
   }
 
@@ -498,8 +662,11 @@
 
   // ========== THREE.JS GLOBALS ==========
   let renderer, scene, camera, composer;
-  let car, sun, sunMesh;
-  let zombies=[], powerups=[], bullets=[], particles=[], decorations=[];
+  let car, sun, sunMesh, ambientLight;
+  let baseFogDensity = 0.006;
+  let baseAmbientIntensity = 0.7;
+  let baseSunIntensity = 2.0;
+  let zombies=[], powerups=[], bullets=[], particles=[], decorations=[], zombieProjectiles=[];
 
   // Mundo infinito: arrays de chunks
   let worldChunks = [];   // segmentos de carretera + bordes
@@ -531,7 +698,7 @@
 
       scene = new THREE.Scene();
       scene.background = new THREE.Color(0x87ceeb);
-      scene.fog = new THREE.FogExp2(0x87ceeb, 0.006);
+      scene.fog = new THREE.FogExp2(0x87ceeb, baseFogDensity);
 
       skyDome = createSkyDome();
       scene.add(skyDome);
@@ -540,10 +707,10 @@
       camera.position.set(0,8,20);
 
       // ILUMINACIÓN
-      const ambientLight = new THREE.AmbientLight(0x606878, 0.7);
+      ambientLight = new THREE.AmbientLight(0x606878, baseAmbientIntensity);
       scene.add(ambientLight);
 
-      sun = new THREE.DirectionalLight(0xffe8cc, 2.0);
+      sun = new THREE.DirectionalLight(0xffe8cc, baseSunIntensity);
       sun.position.set(100, 80, 60);
       sun.castShadow = true;
       sun.shadow.mapSize.set(2048, 2048);
@@ -1034,10 +1201,12 @@
   function spawnZombie(){
     const rand = Math.random();
     let type;
-    if(rand<0.5) type=ZOMBIE_TYPES.NORMAL;
-    else if(rand<0.75) type=ZOMBIE_TYPES.FAST;
-    else if(rand<0.9) type=ZOMBIE_TYPES.TANK;
-    else type=ZOMBIE_TYPES.EXPLOSIVE;
+    if(rand<0.42) type=ZOMBIE_TYPES.NORMAL;
+    else if(rand<0.62) type=ZOMBIE_TYPES.FAST;
+    else if(rand<0.76) type=ZOMBIE_TYPES.TANK;
+    else if(rand<0.88) type=ZOMBIE_TYPES.EXPLOSIVE;
+    else if(rand<0.95) type=ZOMBIE_TYPES.SPITTER;
+    else type=ZOMBIE_TYPES.STALKER;
 
     const zombie = new THREE.Group();
     const bodyMat = new THREE.MeshStandardMaterial({
@@ -1069,9 +1238,29 @@
     const zPos = car.position.z - 50 - Math.random()*30;
 
     zombie.position.set(xPos, 0, zPos);
-    zombie.userData = { type, speed:CONFIG.ZOMBIE_BASE_SPEED*type.speed, health:type.health, maxHealth:type.health, wobble:Math.random()*1000, hitCooldown:0 };
+    zombie.userData = { type, speed:CONFIG.ZOMBIE_BASE_SPEED*type.speed, health:type.health, maxHealth:type.health, wobble:Math.random()*1000, hitCooldown:0, lastShot:0 };
     scene.add(zombie);
     zombies.push(zombie);
+  }
+
+  function spawnBoss(){
+    if(gameState.activeBoss) return;
+    const type = BOSS_TYPE;
+    const boss = new THREE.Group();
+    const bodyMat = new THREE.MeshStandardMaterial({ color:type.color, roughness:0.6, metalness:0.2, emissive:type.color, emissiveIntensity:0.2 });
+    const body = new THREE.Mesh(new THREE.BoxGeometry(1.2*type.size, 1.8*type.size, 1.0*type.size), bodyMat);
+    body.position.y = 0.9*type.size; body.castShadow=true;
+    boss.add(body);
+    const head = new THREE.Mesh(new THREE.BoxGeometry(0.8*type.size, 0.8*type.size, 0.8*type.size), bodyMat.clone());
+    head.position.y = 2.1*type.size; head.castShadow=true;
+    boss.add(head);
+    boss.position.set(0, 0, car.position.z - 60);
+    boss.userData = { type, speed:CONFIG.ZOMBIE_BASE_SPEED*type.speed, health:type.health, maxHealth:type.health, wobble:Math.random()*1000, hitCooldown:0, lastShot:0, isBoss:true };
+    scene.add(boss);
+    zombies.push(boss);
+    gameState.activeBoss = boss;
+    gameState.lastBossWave = gameState.wave;
+    if(elements.bossBar) elements.bossBar.style.display = 'block';
   }
 
   function spawnPowerup(){
@@ -1167,15 +1356,31 @@
     cameraShake(0.22, 300);
   }
 
+  function spawnZombieProjectile(zombie, target){
+    const proj = new THREE.Group();
+    const mat = new THREE.MeshStandardMaterial({ color:0x66ddff, emissive:0x66ddff, emissiveIntensity:0.6 });
+    proj.add(new THREE.Mesh(new THREE.SphereGeometry(0.18,8,8), mat));
+    const start = zombie.position.clone(); start.y = 1.2;
+    proj.position.copy(start);
+    const dir = new THREE.Vector3().subVectors(target, start).normalize();
+    proj.userData = { velocity:dir.multiplyScalar(0.8), life:2.5, damage:10 };
+    scene.add(proj); zombieProjectiles.push(proj);
+  }
+
   // ========== CONTROLES ==========
   const keys={};
   let mouseX=0, mouseY=0, mouseActive=false;
   let lastDriftSound=0;
+  const joystickState = {
+    left: { active:false, x:0, y:0, id:null },
+    right:{ active:false, x:0, y:0, id:null },
+  };
 
   window.addEventListener('keydown', e=>{
     keys[e.key.toLowerCase()]=true;
     if(['ArrowUp','ArrowDown','ArrowLeft','ArrowRight',' '].includes(e.key)) e.preventDefault();
     if(e.key.toLowerCase()==='e' && gameState.hasWeapon && gameState.running) shootBullet();
+    if(e.key.toLowerCase()==='q' && gameState.hasWeapon) cycleWeapon();
   });
   window.addEventListener('keyup', e=>{ keys[e.key.toLowerCase()]=false; });
 
@@ -1193,38 +1398,114 @@
   });
 
   // Touch controls (móvil)
-  let touchStartX=0;
-  window.addEventListener('touchstart', e=>{
-    if(e.touches.length===1) touchStartX=e.touches[0].clientX;
-  }, {passive:true});
-  window.addEventListener('touchmove', e=>{
-    if(gameState.running && !gameState.paused && e.touches.length===1){
-      mouseX=(e.touches[0].clientX/window.innerWidth)*2-1;
-      mouseActive=true;
-      keys['w']=true; // siempre acelerar en móvil
+  function updateJoystickStick(target, x, y){
+    const stick = target.querySelector('.joystick-stick');
+    if(stick){
+      stick.style.transform = `translate(${x}px, ${y}px)`;
     }
-    e.preventDefault();
-  }, {passive:false});
-  window.addEventListener('touchend', ()=>{ keys['w']=false; mouseActive=false; });
+  }
+
+  function handleJoystickMove(side, dx, dy){
+    const max = 40;
+    const clampedX = clamp(dx, -max, max);
+    const clampedY = clamp(dy, -max, max);
+    joystickState[side].x = clampedX / max;
+    joystickState[side].y = clampedY / max;
+  }
+
+  function resetJoystick(side){
+    joystickState[side].active = false;
+    joystickState[side].x = 0;
+    joystickState[side].y = 0;
+  }
+
+  function attachJoystick(el, side){
+    if(!el) return;
+    const base = el.querySelector('.joystick-base');
+    el.addEventListener('pointerdown', e=>{
+      joystickState[side].active = true;
+      joystickState[side].id = e.pointerId;
+      el.setPointerCapture(e.pointerId);
+      const rect = base.getBoundingClientRect();
+      const dx = e.clientX - (rect.left + rect.width/2);
+      const dy = e.clientY - (rect.top + rect.height/2);
+      handleJoystickMove(side, dx, dy);
+      updateJoystickStick(el, joystickState[side].x*40, joystickState[side].y*40);
+    });
+    el.addEventListener('pointermove', e=>{
+      if(!joystickState[side].active || joystickState[side].id !== e.pointerId) return;
+      const rect = base.getBoundingClientRect();
+      const dx = e.clientX - (rect.left + rect.width/2);
+      const dy = e.clientY - (rect.top + rect.height/2);
+      handleJoystickMove(side, dx, dy);
+      updateJoystickStick(el, joystickState[side].x*40, joystickState[side].y*40);
+    });
+    el.addEventListener('pointerup', e=>{
+      if(joystickState[side].id !== e.pointerId) return;
+      resetJoystick(side);
+      updateJoystickStick(el, 0, 0);
+    });
+    el.addEventListener('pointercancel', e=>{
+      if(joystickState[side].id !== e.pointerId) return;
+      resetJoystick(side);
+      updateJoystickStick(el, 0, 0);
+    });
+  }
+
+  attachJoystick(elements.joystickLeft, 'left');
+  attachJoystick(elements.joystickRight, 'right');
+
+  function updateWeaponHUD(){
+    if(elements.weaponStatus) elements.weaponStatus.textContent = gameState.currentWeapon ? gameState.currentWeapon.name : 'Sin arma';
+    if(elements.ammoEl) elements.ammoEl.textContent = gameState.currentWeapon ? gameState.ammo : '0';
+  }
+
+  function cycleWeapon(){
+    if(!gameState.currentWeapon) return;
+    const idx = WEAPON_TYPES.findIndex(w=>w.key===gameState.currentWeapon.key);
+    const next = WEAPON_TYPES[(idx+1)%WEAPON_TYPES.length];
+    gameState.currentWeapon = next;
+    gameState.ammo = Math.max(gameState.ammo, Math.floor(next.ammo*0.6));
+    updateWeaponHUD();
+    inGameMessage(`Arma: ${next.name}`, 1200);
+  }
 
   function shootBullet(){
-    if(!car) return;
+    if(!car || !gameState.currentWeapon) return;
+    const now = performance.now();
+    if(now - gameState.lastShotAt < gameState.currentWeapon.fireRate*1000) return;
+    if(gameState.ammo <= 0){ inGameMessage('Sin munición 🔋', 800); return; }
+    gameState.lastShotAt = now;
+    gameState.ammo--;
+    gameState.shotsFired++;
+    markTutorialStep('shoot');
+    updateWeaponHUD();
     playShootSfx();
-    const bullet = new THREE.Group();
-    const mat = new THREE.MeshStandardMaterial({ color:0xffff00, emissive:0xffff00, emissiveIntensity:1 });
-    bullet.add(new THREE.Mesh(new THREE.SphereGeometry(0.15,8,8), mat));
-    bullet.position.copy(car.position); bullet.position.y=1;
-    const dir = new THREE.Vector3(0,0,-1).applyQuaternion(car.quaternion);
-    bullet.userData = { velocity:dir.multiplyScalar(1.6), life:2.0 };
-    scene.add(bullet); bullets.push(bullet);
+    const bulletsToFire = gameState.currentWeapon.pellets || 1;
+    for(let i=0;i<bulletsToFire;i++){
+      const bullet = new THREE.Group();
+      const mat = new THREE.MeshStandardMaterial({ color:0xffff00, emissive:0xffff00, emissiveIntensity:1 });
+      bullet.add(new THREE.Mesh(new THREE.SphereGeometry(0.15,8,8), mat));
+      bullet.position.copy(car.position); bullet.position.y=1;
+      const spread = gameState.currentWeapon.spread || 0;
+      const dir = new THREE.Vector3(
+        (Math.random()-0.5)*spread,
+        (Math.random()-0.5)*spread,
+        -1
+      ).normalize().applyQuaternion(car.quaternion);
+      bullet.userData = { velocity:dir.multiplyScalar(1.8), life:2.0, damage:gameState.currentWeapon.damage };
+      scene.add(bullet); bullets.push(bullet);
+    }
   }
 
   // ========== FÍSICA DEL COCHE (mejorada con drifting real) ==========
   function updateCarPhysics(dt){
     if(!car || !carState.velocity || gameState.paused) return;
 
-    const forward  = keys['w'] || keys['arrowup'];
-    const backward = keys['s'] || keys['arrowdown'];
+    const joystickForward = joystickState.right.y < -0.25;
+    const joystickBackward = joystickState.right.y > 0.25;
+    const forward  = keys['w'] || keys['arrowup'] || joystickForward;
+    const backward = keys['s'] || keys['arrowdown'] || joystickBackward;
     const left     = keys['a'] || keys['arrowleft'];
     const right    = keys['d'] || keys['arrowright'];
     const brake    = keys[' '];
@@ -1235,6 +1516,7 @@
     let steerInput = 0;
     if(left)  steerInput += 1;
     if(right) steerInput -= 1;
+    if(joystickState.left.active) steerInput += joystickState.left.x;
     if(mouseActive && Math.abs(mouseX)>0.05) steerInput += mouseX * playerData.mouseSensitivity;
     steerInput = clamp(steerInput, -1, 1);
 
@@ -1269,9 +1551,11 @@
 
     if(forward){
       carState.velocity.addScaledVector(carDir, accel);
+      markTutorialStep('move');
     }
     if(backward){
       carState.velocity.addScaledVector(carDir, -CONFIG.BRAKE_FORCE*0.7);
+      markTutorialStep('move');
     }
 
     // --- Fricción diferencial: frontal vs lateral ---
@@ -1364,9 +1648,11 @@
       spawnDust(carWorld, 7+Math.round(speed*8));
       // Sonido de drift
       if(now - lastDriftSound > 200){ playDriftSfx(); lastDriftSound=now; }
+      markTutorialStep('drift');
     }
     if(nitro || gameState.hasTurbo){
       spawnDust(car.position.clone(), 4);
+      markTutorialStep('nitro');
     }
 
     // --- Límites laterales de la carretera ---
@@ -1385,6 +1671,17 @@
       const z = zombies[i];
       const zPos = z.position.clone();
       const dist = zPos.distanceTo(carPos);
+      const type = z.userData.type;
+
+      if(type.stealth){
+        const opacity = dist < 8 ? 0.2 : 0.7;
+        z.traverse(child=>{
+          if(child.material){
+            child.material.transparent = true;
+            child.material.opacity = opacity;
+          }
+        });
+      }
 
       // Movimiento hacia el coche
       if(dist > 2){
@@ -1392,6 +1689,14 @@
         const wobble = Math.sin((performance.now()+z.userData.wobble)/300)*0.22;
         z.position.x += (dir.x + wobble*0.025) * z.userData.speed * speedMult * dt * 42;
         z.position.z += dir.z * z.userData.speed * speedMult * dt * 42;
+      }
+
+      if(type.ranged && dist < 18){
+        const now = performance.now();
+        if(now - z.userData.lastShot > 1800){
+          z.userData.lastShot = now;
+          spawnZombieProjectile(z, carPos);
+        }
       }
 
       // Animación de caminar (brazos y cuerpo)
@@ -1440,7 +1745,7 @@
       }
 
       // Zombie pasado por el coche (kill por detrás)
-      if(z.position.z > car.position.z+14){
+      if(z.position.z > car.position.z+14 && !z.userData.type.boss){
         killZombie(z,i);
       }
     }
@@ -1466,6 +1771,11 @@
 
     scene.remove(zombie);
     zombies.splice(index,1);
+    if(zombie.userData.type.boss){
+      gameState.activeBoss = null;
+      if(elements.bossBar) elements.bossBar.style.display = 'none';
+      inGameMessage('¡Jefe derrotado! 🏆', 2000);
+    }
   }
 
   function getComboMultiplier(){
@@ -1508,6 +1818,7 @@
 
   function activatePowerup(type){
     playPowerupSfx();
+    markTutorialStep('powerup');
     switch(type.effect){
       case 'heal':
         gameState.hp=Math.min(gameState.maxHp, gameState.hp+30);
@@ -1526,7 +1837,10 @@
       case 'weapon':
         gameState.hasWeapon=true;
         gameState.powerups.set('weapon', Date.now() + (type.duration + gameState.weaponDurationBonus * 1000) * gameState.powerupDurationMult);
-        inGameMessage('¡Arma activada! 🔫 (Click/E)', 2000); updatePowerupIcons(); break;
+        gameState.currentWeapon = WEAPON_TYPES[Math.floor(Math.random()*WEAPON_TYPES.length)];
+        gameState.ammo = gameState.currentWeapon.ammo;
+        updateWeaponHUD();
+        inGameMessage(`¡${gameState.currentWeapon.name} equipada! 🔫`, 2000); updatePowerupIcons(); break;
     }
   }
 
@@ -1538,7 +1852,13 @@
         switch(key){
           case 'shield': gameState.hasShield=false; inGameMessage('Escudo desactivado',1000); break;
           case 'magnet': gameState.hasMagnet=false; inGameMessage('Imán desactivado',1000); break;
-          case 'weapon': gameState.hasWeapon=false; inGameMessage('Arma desactivada',1000); break;
+          case 'weapon':
+            gameState.hasWeapon=false;
+            gameState.currentWeapon=null;
+            gameState.ammo=0;
+            updateWeaponHUD();
+            inGameMessage('Arma desactivada',1000);
+            break;
         }
         updatePowerupIcons();
       }
@@ -1557,6 +1877,36 @@
     }
   }
 
+  // ========== EVENTOS DINÁMICOS ==========
+  function startEvent(eventKey){
+    const ev = EVENTS.find(e=>e.key===eventKey);
+    if(!ev) return;
+    gameState.activeEvent = eventKey;
+    gameState.eventEndsAt = performance.now() + ev.duration;
+    switch(eventKey){
+      case 'fog':
+        if(scene && scene.fog) scene.fog.density = baseFogDensity * 2.2;
+        break;
+      case 'storm':
+        if(ambientLight) ambientLight.intensity = baseAmbientIntensity * 0.55;
+        if(sun) sun.intensity = baseSunIntensity * 0.6;
+        break;
+      case 'mega':
+        inGameMessage('⚠️ ¡Mega horda!', 1800);
+        break;
+    }
+    inGameMessage(`Evento: ${ev.name}`, 1600);
+  }
+
+  function endEvent(){
+    if(!gameState.activeEvent) return;
+    if(scene && scene.fog) scene.fog.density = baseFogDensity;
+    if(ambientLight) ambientLight.intensity = baseAmbientIntensity;
+    if(sun) sun.intensity = baseSunIntensity;
+    gameState.activeEvent = null;
+    gameState.eventEndsAt = 0;
+  }
+
   // ========== BALAS ==========
   function updateBullets(dt){
     for(let i=bullets.length-1; i>=0; i--){
@@ -1567,11 +1917,35 @@
 
       for(let j=zombies.length-1; j>=0; j--){
         if(b.position.distanceTo(zombies[j].position)<1.6){
-          zombies[j].userData.health--;
-          if(zombies[j].userData.health<=0){ spawnExplosion(zombies[j].position.clone()); killZombie(zombies[j],j); }
-          else playCollisionSfx();
+          zombies[j].userData.health -= (b.userData.damage || 1);
+          gameState.shotsHit++;
+          if(zombies[j].userData.health<=0){
+            spawnExplosion(zombies[j].position.clone());
+            killZombie(zombies[j],j);
+          } else playCollisionSfx();
           scene.remove(b); bullets.splice(i,1); break;
         }
+      }
+    }
+  }
+
+  function updateZombieProjectiles(dt){
+    for(let i=zombieProjectiles.length-1; i>=0; i--){
+      const p = zombieProjectiles[i];
+      p.position.add(p.userData.velocity.clone().multiplyScalar(dt*60));
+      p.userData.life -= dt;
+      if(p.userData.life<=0){ scene.remove(p); zombieProjectiles.splice(i,1); continue; }
+      if(car && p.position.distanceTo(car.position) < 1.5){
+        if(!gameState.hasShield){
+          const mode = MODES[gameState.mode] || MODES.classic;
+          const dmg = p.userData.damage * mode.damageMultiplier;
+          gameState.hp -= dmg;
+          inGameMessage(`-${Math.floor(dmg)} HP 💥`, 800);
+          showDamageFlash();
+        } else {
+          inGameMessage('¡Escudo! 🛡️', 800);
+        }
+        scene.remove(p); zombieProjectiles.splice(i,1);
       }
     }
   }
@@ -1676,7 +2050,8 @@
       else {              spawnDelay=Math.max(500,800-(wave-10)*30);  maxZombies=Math.min(35,18+(wave-10)*1.2); zombieSpeedMult=1.4+(wave-10)*0.05; }
 
       const mode = MODES[gameState.mode] || MODES.classic;
-      spawnDelay = spawnDelay / mode.spawnRate;
+      const eventSpawnBoost = gameState.activeEvent === 'mega' ? 1.6 : 1;
+      spawnDelay = spawnDelay / (mode.spawnRate * eventSpawnBoost);
 
       if(now-gameState.lastSpawn>spawnDelay){
         if(zombies.length<maxZombies) spawnZombie();
@@ -1691,8 +2066,12 @@
       checkZombies(dt, zombieSpeedMult);
       checkPowerups(dt);
       updateBullets(dt);
+      updateZombieProjectiles(dt);
       updateParticles(dt);
       updatePowerups(dt);
+
+      gameState.timeSurvived += dt;
+      gameState.topSpeed = Math.max(gameState.topSpeed, carState.velocity.length()*60);
 
       // Puntos por sobrevivir
       gameState.score += 0.03 * carState.velocity.length() * dt * 100;
@@ -1720,6 +2099,18 @@
         gameState.zombiesKilledThisWave=0;
         inGameMessage(`🌊 ¡Oleada ${gameState.wave}!`, 2000);
         playPowerupSfx();
+      }
+
+      if(gameState.wave % 5 === 0 && !gameState.activeBoss && gameState.lastBossWave !== gameState.wave){
+        spawnBoss();
+      }
+
+      if(!gameState.activeEvent && Math.random() < 0.002){
+        const ev = EVENTS[Math.floor(Math.random()*EVENTS.length)];
+        startEvent(ev.key);
+      }
+      if(gameState.activeEvent && performance.now() > gameState.eventEndsAt){
+        endEvent();
       }
 
       if(gameState.hp<=0){ gameState.running=false; showGameOver(); }
@@ -1789,6 +2180,12 @@
     }
     if(elements.nitroBar) elements.nitroBar.style.width=(carState.nitro/carState.maxNitro*100)+'%';
     coinsEl.textContent = playerData.totalCoins + Math.floor(gameState.score/100);
+    updateWeaponHUD();
+    if(gameState.activeBoss && elements.bossBarFill){
+      const boss = gameState.activeBoss;
+      const pct = clamp(boss.userData.health / boss.userData.maxHealth, 0, 1);
+      elements.bossBarFill.style.width = `${pct*100}%`;
+    }
 
     // Render
     try { if(composer) composer.render(dt); else renderer.render(scene,camera); }
@@ -1800,6 +2197,7 @@
     zombies.forEach(z=>scene.remove(z)); zombies.length=0;
     powerups.forEach(p=>scene.remove(p)); powerups.length=0;
     bullets.forEach(b=>scene.remove(b)); bullets.length=0;
+    zombieProjectiles.forEach(p=>scene.remove(p)); zombieProjectiles.length=0;
     particles.forEach(p=>scene.remove(p)); particles.length=0;
 
     gameState.score=0; gameState.hp=gameState.maxHp;
@@ -1808,6 +2206,13 @@
     gameState.lastSpawn=performance.now();
     gameState.powerups.clear();
     gameState.hasShield=false; gameState.hasTurbo=false; gameState.hasMagnet=false; gameState.hasWeapon=false;
+    gameState.currentWeapon=null; gameState.ammo=0; gameState.lastShotAt=0;
+    gameState.shotsFired=0; gameState.shotsHit=0; gameState.timeSurvived=0; gameState.topSpeed=0;
+    gameState.activeBoss=null;
+    gameState.lastBossWave=0;
+    endEvent();
+    if(elements.bossBar) elements.bossBar.style.display='none';
+    updateWeaponHUD();
     const mode = MODES[gameState.mode] || MODES.classic;
     gameState.timeRemaining = mode.timeLimit;
 
@@ -1853,9 +2258,21 @@
     elements.goCoins.textContent=coinsGained;
     if(elements.goKills) elements.goKills.textContent=gameState.kills;
     if(elements.goMaxCombo) elements.goMaxCombo.textContent=`x${gameState.maxCombo}`;
+    if(elements.goTime) elements.goTime.textContent=`${Math.floor(gameState.timeSurvived)}s`;
+    if(elements.goTopSpeed) elements.goTopSpeed.textContent=`${Math.floor(gameState.topSpeed)} km/h`;
+    const accuracy = gameState.shotsFired ? Math.round((gameState.shotsHit/gameState.shotsFired)*100) : 0;
+    if(elements.goAccuracy) elements.goAccuracy.textContent=`${accuracy}%`;
     overlayGameOver.style.display='block';
     overlayMenu.style.display='none'; overlayShop.style.display='none';
     elements.btnRestart.style.display='none';
+    tutorialActive = false;
+
+    updateLeaderboard({
+      score: gameState.score,
+      kills: gameState.kills,
+      time: Math.floor(gameState.timeSurvived),
+      date: new Date().toLocaleDateString('es-ES'),
+    });
   }
 
   // ========== INTRO ==========
