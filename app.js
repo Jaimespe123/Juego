@@ -99,6 +99,10 @@
     nitroRegen:     { name:'Recarga Nitro',         baseCost:380, level:0, maxLevel:5, bonus:0.12, desc:'Recarga más rápida' },
     armor:          { name:'Armadura',              baseCost:500, level:0, maxLevel:5, bonus:0.1, desc:'-10% daño recibido' },
     coinMultiplier: { name:'Multiplicador Monedas', baseCost:600, level:0, maxLevel:3, bonus:0.5, desc:'+50% monedas' },
+    powerupDuration:{ name:'Duración Power-Ups',    baseCost:420, level:0, maxLevel:4, bonus:0.12, desc:'+12% duración' },
+    magnetRange:    { name:'Alcance Imán',          baseCost:360, level:0, maxLevel:4, bonus:1.5, desc:'+1.5m de alcance' },
+    shieldDuration: { name:'Escudo Extendido',      baseCost:450, level:0, maxLevel:4, bonus:1.5, desc:'+1.5s de escudo' },
+    weaponDuration: { name:'Munición Extra',        baseCost:480, level:0, maxLevel:4, bonus:2, desc:'+2s de arma' },
   };
 
   const STORAGE_KEY = 'carVsZombies_playerData';
@@ -114,6 +118,10 @@
     hasShield:false, hasTurbo:false, hasMagnet:false, hasWeapon:false,
     mode: 'classic',
     timeRemaining: null,
+    powerupDurationMult: 1,
+    magnetRange: 10,
+    shieldDurationBonus: 0,
+    weaponDurationBonus: 0,
   };
 
   // Estado del coche con física real
@@ -181,6 +189,10 @@
     );
     carState.maxNitro = BASE_CONFIG.MAX_NITRO + (u.nitroTank.level * u.nitroTank.bonus);
     carState.nitro = Math.min(carState.nitro, carState.maxNitro);
+    gameState.powerupDurationMult = 1 + (u.powerupDuration.level * u.powerupDuration.bonus);
+    gameState.magnetRange = 10 + (u.magnetRange.level * u.magnetRange.bonus);
+    gameState.shieldDurationBonus = u.shieldDuration.level * u.shieldDuration.bonus;
+    gameState.weaponDurationBonus = u.weaponDuration.level * u.weaponDuration.bonus;
   }
 
   // ========== UTILIDADES ==========
@@ -1470,7 +1482,7 @@
       const pPos=p.position.clone();
       const dist=pPos.distanceTo(carPos);
 
-      if(gameState.hasMagnet && dist<10){
+      if(gameState.hasMagnet && dist<gameState.magnetRange){
         const dir=new THREE.Vector3().subVectors(carPos,pPos).normalize();
         p.position.add(dir.multiplyScalar(dt*12));
       }
@@ -1492,18 +1504,18 @@
         inGameMessage('¡+30 HP! ❤️', 1500); break;
       case 'shield':
         gameState.hasShield=true;
-        gameState.powerups.set('shield', Date.now()+type.duration);
+        gameState.powerups.set('shield', Date.now() + (type.duration + gameState.shieldDurationBonus * 1000) * gameState.powerupDurationMult);
         inGameMessage('¡Escudo activado! 🛡️', 1500); updatePowerupIcons(); break;
       case 'turbo':
-        gameState.powerups.set('turbo', Date.now()+type.duration);
+        gameState.powerups.set('turbo', Date.now()+type.duration*gameState.powerupDurationMult);
         inGameMessage('¡Turbo activado! ⚡', 1500); updatePowerupIcons(); break;
       case 'magnet':
         gameState.hasMagnet=true;
-        gameState.powerups.set('magnet', Date.now()+type.duration);
+        gameState.powerups.set('magnet', Date.now()+type.duration*gameState.powerupDurationMult);
         inGameMessage('¡Imán activado! 🧲', 1500); updatePowerupIcons(); break;
       case 'weapon':
         gameState.hasWeapon=true;
-        gameState.powerups.set('weapon', Date.now()+type.duration);
+        gameState.powerups.set('weapon', Date.now() + (type.duration + gameState.weaponDurationBonus * 1000) * gameState.powerupDurationMult);
         inGameMessage('¡Arma activada! 🔫 (Click/E)', 2000); updatePowerupIcons(); break;
     }
   }
