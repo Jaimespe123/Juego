@@ -384,10 +384,14 @@
   let worldChunks = [];   // segmentos de carretera + bordes
   let envChunks  = [];    // árboles, postes, edificios a los lados
   let groundChunks = [];  // segmentos de suelo verde
-  let mountainRing = []; // montañas que se mueven con parallax
+  let mountainRing = []; // ELIMINADO: ya no hay montañas
 
   // Ruedas delanteras (referencia para girarlas)
   let frontWheels = [];
+
+  // ✅ Mini-mapa
+  let minimapCanvas = null;
+  let minimapCtx = null;
 
   // ========== INIT THREE ==========
   function initThree(){
@@ -447,9 +451,10 @@
       buildInfiniteWorld();
       createCar();
       initDustSystem();
+      initMinimap(); // ✅ Inicializar mini-mapa
 
       window.addEventListener('resize', onWindowResize, false);
-      console.log('✅ THREE.js inicializado – Mundo infinito activo');
+      console.log('✅ THREE.js inicializado – Mundo infinito activo + Mini-mapa');
     } catch(e){ logErr(e); throw e; }
   }
 
@@ -513,14 +518,7 @@
       groundChunks.push(chunk);
     }
 
-    // Crear anillo de montañas (parallax, mucho más lejos)
-    for(let i=0; i<12; i++){
-      const m = createMountain();
-      const angle = (i/12)*Math.PI*2;
-      m.position.set(Math.cos(angle)*350, 0, Math.sin(angle)*350);
-      scene.add(m);
-      mountainRing.push(m);
-    }
+    // ❌ MONTAÑAS ELIMINADAS - Mejora visual sin pirámides
 
     console.log('🌍 Mundo infinito construido');
   }
@@ -697,21 +695,7 @@
   }
 
   // --- Montaña (horizonte) ---
-  function createMountain(){
-    const g = new THREE.Group();
-    const h = 25+Math.random()*40;
-    const w = 40+Math.random()*30;
-    const mat = new THREE.MeshStandardMaterial({
-      color: new THREE.Color().setHSL(0.3+Math.random()*0.05, 0.25, 0.18+Math.random()*0.12),
-      roughness:0.95
-    });
-    const cone = new THREE.Mesh(new THREE.ConeGeometry(w, h, 5), mat);
-    cone.position.y = h/2;
-    cone.rotation.y = Math.random()*Math.PI;
-    cone.castShadow=true;
-    g.add(cone);
-    return g;
-  }
+  // ❌ FUNCIÓN createMountain ELIMINADA - Ya no hay pirámides/montañas
 
   // ========== COCHE (mejorado con suspensión visual) ==========
   function createCar(){
@@ -922,6 +906,167 @@
       scene.add(p); particles.push(p);
     }
     cameraShake(0.22, 300);
+  }
+
+  // ========== MINI-MAPA FUNCIONAL ==========
+  function initMinimap(){
+    minimapCanvas = document.getElementById('minimap');
+    if(minimapCanvas){
+      minimapCtx = minimapCanvas.getContext('2d');
+      console.log('✅ Mini-mapa inicializado (inferior izquierda)');
+    }
+  }
+
+  function drawMinimap(){
+    if(!minimapCtx || !car) return;
+
+    const ctx = minimapCtx;
+    const w = minimapCanvas.width;
+    const h = minimapCanvas.height;
+    const scale = 2.0; // Escala del mapa (mayor = más zoom)
+
+    // Limpiar
+    ctx.clearRect(0, 0, w, h);
+
+    // Fondo oscuro con gradiente
+    const gradient = ctx.createRadialGradient(w/2, h/2, 0, w/2, h/2, w/2);
+    gradient.addColorStop(0, 'rgba(20, 30, 45, 0.98)');
+    gradient.addColorStop(1, 'rgba(10, 14, 20, 0.98)');
+    ctx.fillStyle = gradient;
+    ctx.fillRect(0, 0, w, h);
+
+    // Grid de referencia
+    ctx.strokeStyle = 'rgba(29, 185, 84, 0.15)';
+    ctx.lineWidth = 1;
+    for(let i=0; i<=w; i+=20){
+      ctx.beginPath();
+      ctx.moveTo(i, 0);
+      ctx.lineTo(i, h);
+      ctx.stroke();
+      ctx.beginPath();
+      ctx.moveTo(0, i);
+      ctx.lineTo(w, i);
+      ctx.stroke();
+    }
+
+    // Carretera (franja gris vertical)
+    ctx.fillStyle = 'rgba(58, 58, 58, 0.7)';
+    ctx.fillRect(w/2 - 18, 0, 36, h);
+
+    // Líneas de carretera
+    ctx.strokeStyle = 'rgba(255, 255, 255, 0.3)';
+    ctx.lineWidth = 1;
+    // Líneas laterales
+    ctx.beginPath();
+    ctx.moveTo(w/2 - 18, 0);
+    ctx.lineTo(w/2 - 18, h);
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.moveTo(w/2 + 18, 0);
+    ctx.lineTo(w/2 + 18, h);
+    ctx.stroke();
+    // Línea central discontinua
+    ctx.setLineDash([5, 5]);
+    ctx.beginPath();
+    ctx.moveTo(w/2, 0);
+    ctx.lineTo(w/2, h);
+    ctx.stroke();
+    ctx.setLineDash([]);
+
+    // Zombies (puntos de colores según tipo)
+    zombies.forEach(z => {
+      const dx = (z.position.x - car.position.x) * scale;
+      const dz = (z.position.z - car.position.z) * scale;
+
+      if(Math.abs(dx) < w/2 && Math.abs(dz) < h/2){
+        const x = w/2 + dx;
+        const y = h/2 + dz;
+
+        // Color según tipo de zombie
+        let color = '#ff0000';
+        if(z.userData.type.name === 'Rápido') color = '#ff6600';
+        if(z.userData.type.name === 'Tanque') color = '#8b0000';
+        if(z.userData.type.name === 'Explosivo') color = '#ffff00';
+
+        ctx.fillStyle = color;
+        ctx.shadowColor = color;
+        ctx.shadowBlur = 4;
+        ctx.beginPath();
+        ctx.arc(x, y, 3.5, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.shadowBlur = 0;
+      }
+    });
+
+    // Power-ups (estrellas brillantes)
+    powerups.forEach(p => {
+      const dx = (p.position.x - car.position.x) * scale;
+      const dz = (p.position.z - car.position.z) * scale;
+
+      if(Math.abs(dx) < w/2 && Math.abs(dz) < h/2){
+        const x = w/2 + dx;
+        const y = h/2 + dz;
+
+        ctx.fillStyle = '#' + p.userData.type.color.toString(16).padStart(6, '0');
+        ctx.shadowColor = ctx.fillStyle;
+        ctx.shadowBlur = 6;
+        ctx.beginPath();
+        ctx.arc(x, y, 4.5, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.shadowBlur = 0;
+      }
+    });
+
+    // Balas (puntos amarillos pequeños)
+    bullets.forEach(b => {
+      const dx = (b.position.x - car.position.x) * scale;
+      const dz = (b.position.z - car.position.z) * scale;
+
+      if(Math.abs(dx) < w/2 && Math.abs(dz) < h/2){
+        const x = w/2 + dx;
+        const y = h/2 + dz;
+
+        ctx.fillStyle = '#ffff00';
+        ctx.beginPath();
+        ctx.arc(x, y, 2, 0, Math.PI * 2);
+        ctx.fill();
+      }
+    });
+
+    // Coche (triángulo verde brillante en el centro)
+    ctx.fillStyle = '#1db954';
+    ctx.strokeStyle = '#ffffff';
+    ctx.lineWidth = 2.5;
+    ctx.shadowColor = '#1db954';
+    ctx.shadowBlur = 10;
+
+    ctx.beginPath();
+    ctx.moveTo(w/2, h/2 - 10);
+    ctx.lineTo(w/2 - 7, h/2 + 8);
+    ctx.lineTo(w/2 + 7, h/2 + 8);
+    ctx.closePath();
+    ctx.fill();
+    ctx.stroke();
+    ctx.shadowBlur = 0;
+
+    // Indicador de dirección (línea desde el coche)
+    ctx.strokeStyle = 'rgba(29, 185, 84, 0.6)';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(w/2, h/2);
+    ctx.lineTo(w/2, h/2 - 18);
+    ctx.stroke();
+
+    // Borde exterior del mini-mapa
+    ctx.strokeStyle = '#1db954';
+    ctx.lineWidth = 3;
+    ctx.strokeRect(2, 2, w - 4, h - 4);
+
+    // Texto superior: "MAPA"
+    ctx.fillStyle = '#1db954';
+    ctx.font = 'bold 11px Arial';
+    ctx.textAlign = 'center';
+    ctx.fillText('MAPA', w/2, 14);
   }
 
   // ========== CONTROLES ==========
@@ -1377,15 +1522,7 @@
         chunk.position.z -= totalLen;
       }
     });
-    // Montañas: parallax (se mueven con el coche pero más lento)
-    mountainRing.forEach(m=>{
-      if(m.position.z > carZ + 400){
-        m.position.z -= 700;
-      }
-      if(m.position.z < carZ - 400){
-        m.position.z += 700;
-      }
-    });
+    // ❌ MONTAÑAS ELIMINADAS - No hay parallax de pirámides
   }
 
   // ========== LOOP PRINCIPAL ==========
@@ -1503,6 +1640,9 @@
     if(elements.waveEl) elements.waveEl.textContent=`Oleada ${gameState.wave}`;
     if(elements.nitroBar) elements.nitroBar.style.width=(carState.nitro/carState.maxNitro*100)+'%';
     coinsEl.textContent = playerData.totalCoins + Math.floor(gameState.score/100);
+
+    // ✅ Dibujar mini-mapa cada frame
+    drawMinimap();
 
     // Render
     try { if(composer) composer.render(dt); else renderer.render(scene,camera); }
