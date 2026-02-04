@@ -178,21 +178,31 @@
   }
 
   function applyUpgrades(){
-    const u = playerData.upgrades;
-    gameState.maxHp = 100 + (u.maxHealth.level * u.maxHealth.bonus);
-    CONFIG.MAX_SPEED = BASE_CONFIG.MAX_SPEED + (u.speed.level * u.speed.bonus);
-    CONFIG.TURN_SPEED = BASE_CONFIG.TURN_SPEED * (1 + u.handling.level * u.handling.bonus);
+    const upgrades = playerData.upgrades || {};
+    const getUpgrade = (key) => upgrades[key] || { level: 0, bonus: 0 };
+    const maxHealth = getUpgrade('maxHealth');
+    const speed = getUpgrade('speed');
+    const handling = getUpgrade('handling');
+    const nitroTank = getUpgrade('nitroTank');
+    const powerupDuration = getUpgrade('powerupDuration');
+    const magnetRange = getUpgrade('magnetRange');
+    const shieldDuration = getUpgrade('shieldDuration');
+    const weaponDuration = getUpgrade('weaponDuration');
+
+    gameState.maxHp = 100 + (maxHealth.level * maxHealth.bonus);
+    CONFIG.MAX_SPEED = BASE_CONFIG.MAX_SPEED + (speed.level * speed.bonus);
+    CONFIG.TURN_SPEED = BASE_CONFIG.TURN_SPEED * (1 + handling.level * handling.bonus);
     CONFIG.LATERAL_FRICTION = clamp(
-      BASE_CONFIG.LATERAL_FRICTION + (u.handling.level * 0.01),
+      BASE_CONFIG.LATERAL_FRICTION + (handling.level * 0.01),
       0.82,
       0.95
     );
-    carState.maxNitro = BASE_CONFIG.MAX_NITRO + (u.nitroTank.level * u.nitroTank.bonus);
+    carState.maxNitro = BASE_CONFIG.MAX_NITRO + (nitroTank.level * nitroTank.bonus);
     carState.nitro = Math.min(carState.nitro, carState.maxNitro);
-    gameState.powerupDurationMult = 1 + (u.powerupDuration.level * u.powerupDuration.bonus);
-    gameState.magnetRange = 10 + (u.magnetRange.level * u.magnetRange.bonus);
-    gameState.shieldDurationBonus = u.shieldDuration.level * u.shieldDuration.bonus;
-    gameState.weaponDurationBonus = u.weaponDuration.level * u.weaponDuration.bonus;
+    gameState.powerupDurationMult = 1 + (powerupDuration.level * powerupDuration.bonus);
+    gameState.magnetRange = 10 + (magnetRange.level * magnetRange.bonus);
+    gameState.shieldDurationBonus = shieldDuration.level * shieldDuration.bonus;
+    gameState.weaponDurationBonus = weaponDuration.level * weaponDuration.bonus;
   }
 
   // ========== UTILIDADES ==========
