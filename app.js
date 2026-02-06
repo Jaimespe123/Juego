@@ -381,10 +381,11 @@
   let zombies=[], powerups=[], bullets=[], particles=[], decorations=[];
 
   // Mundo infinito: arrays de chunks
-  let worldChunks = [];   // segmentos de carretera + bordes
-  let envChunks  = [];    // árboles, postes, edificios a los lados
-  let groundChunks = [];  // segmentos de suelo verde
-  let mountainRing = []; // ELIMINADO: ya no hay montañas
+ // ✅ CORREGIDO:
+ let worldChunks = [];
+ let envChunks  = [];
+ let groundChunks = [];
+ // Montañas eliminadas (no son necesarias)
 
   // Ruedas delanteras (referencia para girarlas)
   let frontWheels = [];
@@ -908,6 +909,7 @@
     cameraShake(0.22, 300);
   }
 
+ // ✅ CORREGIDO - Opción A:
   // ========== MINI-MAPA FUNCIONAL ==========
   function initMinimap(){
     minimapCanvas = document.getElementById('minimap');
@@ -923,19 +925,16 @@
     const ctx = minimapCtx;
     const w = minimapCanvas.width;
     const h = minimapCanvas.height;
-    const scale = 2.0; // Escala del mapa (mayor = más zoom)
+    const scale = 2.0;
 
-    // Limpiar
     ctx.clearRect(0, 0, w, h);
 
-    // Fondo oscuro con gradiente
     const gradient = ctx.createRadialGradient(w/2, h/2, 0, w/2, h/2, w/2);
     gradient.addColorStop(0, 'rgba(20, 30, 45, 0.98)');
     gradient.addColorStop(1, 'rgba(10, 14, 20, 0.98)');
     ctx.fillStyle = gradient;
     ctx.fillRect(0, 0, w, h);
 
-    // Grid de referencia
     ctx.strokeStyle = 'rgba(29, 185, 84, 0.15)';
     ctx.lineWidth = 1;
     for(let i=0; i<=w; i+=20){
@@ -949,14 +948,11 @@
       ctx.stroke();
     }
 
-    // Carretera (franja gris vertical)
     ctx.fillStyle = 'rgba(58, 58, 58, 0.7)';
     ctx.fillRect(w/2 - 18, 0, 36, h);
 
-    // Líneas de carretera
     ctx.strokeStyle = 'rgba(255, 255, 255, 0.3)';
     ctx.lineWidth = 1;
-    // Líneas laterales
     ctx.beginPath();
     ctx.moveTo(w/2 - 18, 0);
     ctx.lineTo(w/2 - 18, h);
@@ -965,7 +961,6 @@
     ctx.moveTo(w/2 + 18, 0);
     ctx.lineTo(w/2 + 18, h);
     ctx.stroke();
-    // Línea central discontinua
     ctx.setLineDash([5, 5]);
     ctx.beginPath();
     ctx.moveTo(w/2, 0);
@@ -973,7 +968,6 @@
     ctx.stroke();
     ctx.setLineDash([]);
 
-    // Zombies (puntos de colores según tipo)
     zombies.forEach(z => {
       const dx = (z.position.x - car.position.x) * scale;
       const dz = (z.position.z - car.position.z) * scale;
@@ -982,7 +976,6 @@
         const x = w/2 + dx;
         const y = h/2 + dz;
 
-        // Color según tipo de zombie
         let color = '#ff0000';
         if(z.userData.type.name === 'Rápido') color = '#ff6600';
         if(z.userData.type.name === 'Tanque') color = '#8b0000';
@@ -998,7 +991,6 @@
       }
     });
 
-    // Power-ups (estrellas brillantes)
     powerups.forEach(p => {
       const dx = (p.position.x - car.position.x) * scale;
       const dz = (p.position.z - car.position.z) * scale;
@@ -1017,7 +1009,6 @@
       }
     });
 
-    // Balas (puntos amarillos pequeños)
     bullets.forEach(b => {
       const dx = (b.position.x - car.position.x) * scale;
       const dz = (b.position.z - car.position.z) * scale;
@@ -1033,7 +1024,6 @@
       }
     });
 
-    // Coche (triángulo verde brillante en el centro)
     ctx.fillStyle = '#1db954';
     ctx.strokeStyle = '#ffffff';
     ctx.lineWidth = 2.5;
@@ -1049,7 +1039,6 @@
     ctx.stroke();
     ctx.shadowBlur = 0;
 
-    // Indicador de dirección (línea desde el coche)
     ctx.strokeStyle = 'rgba(29, 185, 84, 0.6)';
     ctx.lineWidth = 2;
     ctx.beginPath();
@@ -1057,18 +1046,17 @@
     ctx.lineTo(w/2, h/2 - 18);
     ctx.stroke();
 
-    // Borde exterior del mini-mapa
     ctx.strokeStyle = '#1db954';
     ctx.lineWidth = 3;
     ctx.strokeRect(2, 2, w - 4, h - 4);
 
-    // Texto superior: "MAPA"
     ctx.fillStyle = '#1db954';
     ctx.font = 'bold 11px Arial';
     ctx.textAlign = 'center';
     ctx.fillText('MAPA', w/2, 14);
   }
 
+  
   // ========== CONTROLES ==========
   const keys={};
   let mouseX=0, mouseY=0, mouseActive=false;
