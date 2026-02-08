@@ -11,6 +11,9 @@
 </head>
 <body>
   <div id="container" role="main">
+    <!-- Fondo animado de partículas -->
+    <canvas id="bgCanvas" class="bg-canvas"></canvas>
+    
     <!-- HUD del juego -->
     <aside id="hud" aria-label="Estadísticas del juego">
       <div class="stat">
@@ -54,26 +57,12 @@
       <!-- Los power-ups activos aparecerán aquí -->
     </div>
 
-    <!-- Barra de jefe -->
-    <div id="bossBar" aria-label="Vida del jefe" style="display:none;">
-      <div class="boss-label">👹 JEFE</div>
-      <div class="boss-bar-track">
-        <div id="bossBarFill"></div>
-      </div>
-    </div>
-
-   <!-- Mini-mapa (Inferior Izquierda) -->
- <canvas id="minimap-bottom" width="160" height="160"
-        style="position: absolute; bottom: 12px; left: 12px; z-index: 45;">
- </canvas>
-
- <!-- Mini-mapa (Superior Derecha) -->
- <canvas id="minimap-top" width="140" height="140"
-        style="position: absolute; top: 12px; right: 12px; z-index: 45;
-               border: 3px solid var(--accent); border-radius: 12px;
-               background: rgba(10, 14, 20, 0.95); box-shadow: var(--shadow-lg);">
- </canvas>
-
+    <!-- Mini-mapa (Inferior Izquierda) -->
+    <canvas id="minimap" width="160" height="160" 
+            style="position: absolute; bottom: 12px; left: 12px; z-index: 45; 
+                   border: 3px solid var(--accent); border-radius: 12px; 
+                   background: rgba(10, 14, 20, 0.95); box-shadow: var(--shadow-lg);">
+    </canvas>
 
     <!-- Controles superiores -->
     <nav id="topRight" aria-label="Controles del juego">
@@ -88,52 +77,92 @@
       </button>
     </nav>
 
-    <!-- MENÚ PRINCIPAL -->
-    <section id="overlayMenu" class="overlay" role="dialog" aria-labelledby="menuTitle" aria-modal="true">
-      <h1 id="menuTitle">🚗 Car vs Zombies ULTRA</h1>
-      <p class="subtitle">
-        Conduce, derrapa y esquiva hordas de zombies.<br>
-        ¡Power-ups, armas y mejoras permanentes!
-      </p>
+    <!-- MENÚ PRINCIPAL MEJORADO -->
+    <section id="overlayMenu" class="overlay hero-menu" role="dialog" aria-labelledby="menuTitle" aria-modal="true">
+      <!-- Efecto de fondo con líneas de carretera -->
+      <div class="road-lines"></div>
       
-      <div class="menu-actions">
-        <button class="btn primary large" id="startBtn">
-          ▶️ Empezar Partida
-        </button>
-        <button class="btn large" id="openShop">
-          🛒 Tienda & Mejoras
-        </button>
-        <button class="btn large" id="openZombieInfo">
-          🧟 Información de Zombies
-        </button>
-        <button class="btn large" id="openLeaderboard">
-          🏆 Clasificación
-        </button>
-        <button class="btn large" id="openSettings">
-          ⚙️ Ajustes
-        </button>
-      </div>
-      
-      <div class="controls-info">
-        <strong>Controles:</strong>
-        <ul class="controls-list">
-          <li><kbd>WASD</kbd> o <kbd>Flechas</kbd> – Movimiento</li>
-          <li><kbd>Ratón</kbd> – Dirección</li>
-          <li><kbd>Espacio</kbd> – Freno/Derrape</li>
-          <li><kbd>Shift</kbd> – Freno de mano</li>
-          <li><kbd>N</kbd> – Nitro (se recarga)</li>
-          <li><kbd>E</kbd> o <kbd>Click</kbd> – Disparar (con arma)</li>
-        </ul>
-      </div>
-      
-      <div class="game-tips">
-        <strong>💡 Tips:</strong>
-        <ul class="controls-list">
-          <li>Mantén el combo alto para más puntos</li>
-          <li>Los zombies tanque (rojos) tienen 3 vidas</li>
-          <li>¡Cuidado con los zombies amarillos, explotan!</li>
-          <li>Invierte en mejoras permanentes</li>
-        </ul>
+      <div class="hero-content">
+        <!-- Logo del juego con efecto neón -->
+        <div class="game-logo">
+          <div class="logo-icon">🚗</div>
+          <h1 id="menuTitle" class="neon-text">
+            CAR VS ZOMBIES
+            <span class="ultra-badge">ULTRA</span>
+          </h1>
+          <p class="tagline">
+            <span class="typing-text">Conduce, derrapa y sobrevive...</span>
+          </p>
+        </div>
+
+        <!-- Estadísticas rápidas -->
+        <div class="quick-stats">
+          <div class="stat-card">
+            <div class="stat-icon">🏆</div>
+            <div class="stat-value" id="menuBestScore">0</div>
+            <div class="stat-label">Récord</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-icon">💰</div>
+            <div class="stat-value" id="menuCoins">0</div>
+            <div class="stat-label">Monedas</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-icon">🎮</div>
+            <div class="stat-value" id="menuGames">0</div>
+            <div class="stat-label">Partidas</div>
+          </div>
+        </div>
+        
+        <!-- Botones principales con efectos -->
+        <div class="menu-actions">
+          <button class="btn-hero primary pulse" id="startBtn">
+            <span class="btn-icon">▶️</span>
+            <span class="btn-text">EMPEZAR PARTIDA</span>
+            <span class="btn-glow"></span>
+          </button>
+          
+          <div class="menu-grid">
+            <button class="btn-hero secondary" id="openShop">
+              <span class="btn-icon">🛒</span>
+              <span class="btn-text">Tienda</span>
+            </button>
+            <button class="btn-hero secondary" id="openZombieInfo">
+              <span class="btn-icon">🧟</span>
+              <span class="btn-text">Zombies</span>
+            </button>
+            <button class="btn-hero secondary" id="openLeaderboard">
+              <span class="btn-icon">🏆</span>
+              <span class="btn-text">Records</span>
+            </button>
+            <button class="btn-hero secondary" id="openSettings">
+              <span class="btn-icon">⚙️</span>
+              <span class="btn-text">Ajustes</span>
+            </button>
+          </div>
+        </div>
+        
+        <!-- Controles compactos -->
+        <div class="controls-compact">
+          <div class="control-tip">
+            <kbd>WASD</kbd> <span>Movimiento</span>
+          </div>
+          <div class="control-tip">
+            <kbd>MOUSE</kbd> <span>Dirección</span>
+          </div>
+          <div class="control-tip">
+            <kbd>SHIFT</kbd> <span>Drift</span>
+          </div>
+          <div class="control-tip">
+            <kbd>N</kbd> <span>Nitro</span>
+          </div>
+        </div>
+
+        <!-- Footer con versión -->
+        <div class="menu-footer">
+          <div class="version">Version ULTRA v2.0</div>
+          <div class="credit">🎮 Mejor en Desktop • <kbd>F11</kbd> Pantalla Completa</div>
+        </div>
       </div>
     </section>
 
@@ -235,13 +264,13 @@
             </div>
           </div>
           <p class="zombie-desc">
-            ¡Muy veloz! Difícil de esquivar pero hace menos daño. Vale el doble de puntos.
+            Muy rápido pero frágil. Difícil de alcanzar, pero vale más puntos.
           </p>
         </div>
 
         <!-- Zombie Tanque -->
         <div class="zombie-info-card" style="border-color: #8b0000;">
-          <div class="zombie-icon" style="background: #8b0000;">🧟‍♂️</div>
+          <div class="zombie-icon" style="background: #8b0000;">🧟‍♀️</div>
           <h3 style="color: #8b0000;">Zombie Tanque</h3>
           <div class="zombie-stats">
             <div class="stat-row">
@@ -250,7 +279,7 @@
             </div>
             <div class="stat-row">
               <span class="stat-label">Vida:</span>
-              <span class="stat-value">⭐⭐⭐ (3 golpes)</span>
+              <span class="stat-value">⭐⭐⭐</span>
             </div>
             <div class="stat-row">
               <span class="stat-label">Daño:</span>
@@ -448,12 +477,6 @@
 
     <!-- Mensaje flotante en juego -->
     <div id="inGameMsg" role="status" aria-live="polite"></div>
-
-    <!-- Footer informativo -->
-    <footer id="footer">
-      💻 Mejor experiencia en desktop • <kbd>F12</kbd> para consola • 
-      <strong style="color: var(--accent);">ULTRA VERSION</strong>
-    </footer>
   </div>
 
   <!-- Three.js y dependencias -->
@@ -465,6 +488,92 @@
   <script src="https://unpkg.com/three@0.152.2/examples/js/postprocessing/ShaderPass.js"></script>
   <script src="https://unpkg.com/three@0.152.2/examples/js/shaders/FXAAShader.js"></script>
   <script src="https://unpkg.com/three@0.152.2/examples/js/postprocessing/FilmPass.js"></script>
+  
+  <!-- Animación de fondo del menú -->
+  <script>
+    // Animación de partículas en el fondo del menú
+    (function() {
+      const canvas = document.getElementById('bgCanvas');
+      if (!canvas) return;
+      
+      const ctx = canvas.getContext('2d');
+      let particles = [];
+      let w, h;
+
+      function resize() {
+        w = canvas.width = window.innerWidth;
+        h = canvas.height = window.innerHeight;
+      }
+
+      class Particle {
+        constructor() {
+          this.x = Math.random() * w;
+          this.y = Math.random() * h;
+          this.vx = (Math.random() - 0.5) * 0.5;
+          this.vy = (Math.random() - 0.5) * 0.5;
+          this.size = Math.random() * 2 + 1;
+          this.opacity = Math.random() * 0.5 + 0.2;
+        }
+
+        update() {
+          this.x += this.vx;
+          this.y += this.vy;
+
+          if (this.x < 0 || this.x > w) this.vx *= -1;
+          if (this.y < 0 || this.y > h) this.vy *= -1;
+        }
+
+        draw() {
+          ctx.fillStyle = `rgba(29, 185, 84, ${this.opacity})`;
+          ctx.beginPath();
+          ctx.arc(this.x, this.y, this.size, 0, Math.PI * 2);
+          ctx.fill();
+        }
+      }
+
+      function init() {
+        resize();
+        particles = [];
+        for (let i = 0; i < 80; i++) {
+          particles.push(new Particle());
+        }
+      }
+
+      function animate() {
+        ctx.fillStyle = 'rgba(10, 14, 20, 0.1)';
+        ctx.fillRect(0, 0, w, h);
+
+        particles.forEach(p => {
+          p.update();
+          p.draw();
+        });
+
+        // Conexiones entre partículas cercanas
+        for (let i = 0; i < particles.length; i++) {
+          for (let j = i + 1; j < particles.length; j++) {
+            const dx = particles[i].x - particles[j].x;
+            const dy = particles[i].y - particles[j].y;
+            const dist = Math.sqrt(dx * dx + dy * dy);
+
+            if (dist < 150) {
+              ctx.strokeStyle = `rgba(29, 185, 84, ${0.2 * (1 - dist / 150)})`;
+              ctx.lineWidth = 0.5;
+              ctx.beginPath();
+              ctx.moveTo(particles[i].x, particles[i].y);
+              ctx.lineTo(particles[j].x, particles[j].y);
+              ctx.stroke();
+            }
+          }
+        }
+
+        requestAnimationFrame(animate);
+      }
+
+      window.addEventListener('resize', resize);
+      init();
+      animate();
+    })();
+  </script>
   
   <!-- Aplicación principal ULTRA -->
   <script src="app.js"></script>

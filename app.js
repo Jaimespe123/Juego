@@ -295,7 +295,7 @@
     try { startGame(); } catch(e){ console.error('❌ Error:', e); alert('Error: '+e.message); }
   });
   elements.playAgain.addEventListener('click', startGame);
-  elements.toMenu.addEventListener('click', ()=>{ overlayGameOver.style.display='none'; overlayMenu.style.display='block'; });
+  elements.toMenu.addEventListener('click', ()=>{ overlayGameOver.style.display='none'; overlayMenu.style.display='block'; updateMenuStats(); });
 
   elements.btnOpenMenu.addEventListener('click', ()=>{
     if(gameState.running){
@@ -352,6 +352,15 @@
 
   function updateShopCoinsDisplay(){ if(elements.shopCoinsDisplay) elements.shopCoinsDisplay.textContent=playerData.totalCoins; }
 
+  function updateMenuStats(){
+    const menuBestScore = document.getElementById('menuBestScore');
+    const menuCoins = document.getElementById('menuCoins');
+    const menuGames = document.getElementById('menuGames');
+    if(menuBestScore) menuBestScore.textContent = playerData.bestScore || 0;
+    if(menuCoins) menuCoins.textContent = playerData.totalCoins || 0;
+    if(menuGames) menuGames.textContent = playerData.gamesPlayed || 0;
+  }
+
   function updateCarColor(colorIndex){
     if(!car) return;
     const color=SHOP_COLORS[colorIndex];
@@ -364,16 +373,17 @@
   }
 
   elements.openShop.addEventListener('click', ()=>{ overlayMenu.style.display='none'; overlayShop.style.display='block'; renderShop(); });
-  elements.backFromShop.addEventListener('click', ()=>{ overlayShop.style.display='none'; overlayMenu.style.display='block'; });
+  elements.backFromShop.addEventListener('click', ()=>{ overlayShop.style.display='none'; overlayMenu.style.display='block'; updateMenuStats(); });
 
   // Información de zombies
   elements.openZombieInfo = document.getElementById('openZombieInfo');
   elements.overlayZombieInfo = document.getElementById('overlayZombieInfo');
   elements.backFromZombieInfo = document.getElementById('backFromZombieInfo');
   if(elements.openZombieInfo) elements.openZombieInfo.addEventListener('click', ()=>{ overlayMenu.style.display='none'; elements.overlayZombieInfo.style.display='block'; });
-  if(elements.backFromZombieInfo) elements.backFromZombieInfo.addEventListener('click', ()=>{ elements.overlayZombieInfo.style.display='none'; overlayMenu.style.display='block'; });
+  if(elements.backFromZombieInfo) elements.backFromZombieInfo.addEventListener('click', ()=>{ elements.overlayZombieInfo.style.display='none'; overlayMenu.style.display='block'; updateMenuStats(); });
 
   loadPlayerData();
+  updateMenuStats();
 
   // ========== THREE.JS GLOBALS ==========
   let renderer, scene, camera, composer;

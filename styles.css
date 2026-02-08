@@ -266,6 +266,7 @@ canvas {
   margin: var(--spacing-xl) 0;
 }
 
+
 .controls-info, .game-tips {
   margin-top: var(--spacing-lg);
   padding: var(--spacing-md);
@@ -452,6 +453,71 @@ kbd {
   font-size: 13px;
   color: var(--muted);
   margin-bottom: var(--spacing-sm);
+
+.mode-selector {
+  margin: var(--spacing-lg) 0;
+  text-align: left;
+}
+
+.mode-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: var(--spacing-md);
+  margin-top: var(--spacing-md);
+}
+
+.mode-card {
+  background: var(--panel);
+  border: 2px solid rgba(255, 255, 255, 0.08);
+  border-radius: var(--radius-md);
+  padding: var(--spacing-md);
+  color: var(--text);
+  text-align: left;
+  cursor: pointer;
+  transition: all var(--transition-normal);
+  position: relative;
+  min-height: 140px;
+}
+
+.mode-card h3 {
+  margin: 0 0 var(--spacing-sm) 0;
+  font-size: 16px;
+  color: var(--accent);
+}
+
+.mode-card p {
+  margin: 0;
+  font-size: 12px;
+  color: var(--muted);
+  line-height: 1.4;
+}
+
+.mode-card:hover {
+  border-color: var(--accent);
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-md);
+}
+
+.mode-card.selected {
+  border-color: var(--accent);
+  box-shadow: 0 0 18px rgba(29, 185, 84, 0.4);
+}
+
+.mode-tag {
+  display: inline-block;
+  margin-top: var(--spacing-sm);
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 700;
+  background: rgba(29, 185, 84, 0.2);
+  color: var(--accent);
+}
+
+.mode-tag.danger {
+  background: rgba(255, 77, 79, 0.2);
+  color: var(--danger);
+}
 }
 
 .upgrade-price {
