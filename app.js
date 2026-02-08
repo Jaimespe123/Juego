@@ -295,12 +295,20 @@
     try { startGame(); } catch(e){ console.error('❌ Error:', e); alert('Error: '+e.message); }
   });
   elements.playAgain.addEventListener('click', startGame);
-  elements.toMenu.addEventListener('click', ()=>{ overlayGameOver.style.display='none'; overlayMenu.style.display='block'; updateMenuStats(); });
+  elements.toMenu.addEventListener('click', ()=>{ overlayGameOver.style.display='none'; overlayMenu.style.display='block'; updateMenuStats(); showBackgroundCanvas(); hideHUD(); });
 
   elements.btnOpenMenu.addEventListener('click', ()=>{
     if(gameState.running){
       gameState.paused = !gameState.paused;
       overlayMenu.style.display = gameState.paused?'block':'none';
+      if(gameState.paused){
+        showBackgroundCanvas();
+        hideHUD();
+        updateMenuStats();
+      } else {
+        hideBackgroundCanvas();
+        showHUD();
+      }
     }
   });
 
@@ -361,6 +369,39 @@
     if(menuGames) menuGames.textContent = playerData.gamesPlayed || 0;
   }
 
+  // Funciones para controlar el canvas de fondo
+  function showBackgroundCanvas(){
+    const bgCanvas = document.getElementById('bgCanvas');
+
+  function showHUD(){
+    const hud = document.getElementById('hud');
+    const minimap = document.getElementById('minimap');
+    const topRight = document.getElementById('topRight');
+    const powerupContainer = document.getElementById('powerupContainer');
+    if(hud) hud.style.display='block';
+    if(minimap) minimap.style.display='block';
+    if(topRight) topRight.style.display='flex';
+    if(powerupContainer) powerupContainer.style.display='flex';
+  }
+
+  function hideHUD(){
+    const hud = document.getElementById('hud');
+    const minimap = document.getElementById('minimap');
+    const topRight = document.getElementById('topRight');
+    const powerupContainer = document.getElementById('powerupContainer');
+    if(hud) hud.style.display='none';
+    if(minimap) minimap.style.display='none';
+    if(topRight) topRight.style.display='none';
+    if(powerupContainer) powerupContainer.style.display='none';
+  }
+    if(bgCanvas) bgCanvas.style.display='block';
+  }
+
+  function hideBackgroundCanvas(){
+    const bgCanvas = document.getElementById('bgCanvas');
+    if(bgCanvas) bgCanvas.style.display='none';
+  }
+
   function updateCarColor(colorIndex){
     if(!car) return;
     const color=SHOP_COLORS[colorIndex];
@@ -373,14 +414,14 @@
   }
 
   elements.openShop.addEventListener('click', ()=>{ overlayMenu.style.display='none'; overlayShop.style.display='block'; renderShop(); });
-  elements.backFromShop.addEventListener('click', ()=>{ overlayShop.style.display='none'; overlayMenu.style.display='block'; updateMenuStats(); });
+  elements.backFromShop.addEventListener('click', ()=>{ overlayShop.style.display='none'; overlayMenu.style.display='block'; updateMenuStats(); showBackgroundCanvas(); });
 
   // Información de zombies
   elements.openZombieInfo = document.getElementById('openZombieInfo');
   elements.overlayZombieInfo = document.getElementById('overlayZombieInfo');
   elements.backFromZombieInfo = document.getElementById('backFromZombieInfo');
   if(elements.openZombieInfo) elements.openZombieInfo.addEventListener('click', ()=>{ overlayMenu.style.display='none'; elements.overlayZombieInfo.style.display='block'; });
-  if(elements.backFromZombieInfo) elements.backFromZombieInfo.addEventListener('click', ()=>{ elements.overlayZombieInfo.style.display='none'; overlayMenu.style.display='block'; updateMenuStats(); });
+  if(elements.backFromZombieInfo) elements.backFromZombieInfo.addEventListener('click', ()=>{ elements.overlayZombieInfo.style.display='none'; overlayMenu.style.display='block'; updateMenuStats(); showBackgroundCanvas(); });
 
   loadPlayerData();
   updateMenuStats();
@@ -1681,9 +1722,11 @@
 
   function startGame(){
     if(!scene||!car){ alert('Error: Escena no inicializada. Recarga la página.'); return; }
+    showHUD();
     resetGame();
     gameState.running=true; gameState.paused=false;
     overlayMenu.style.display='none'; overlayShop.style.display='none'; overlayGameOver.style.display='none';
+    hideBackgroundCanvas();
     if(!audioCtx) initAudio();
     updateAudioGains();
     gameState.lastTime=performance.now();
@@ -1724,6 +1767,8 @@
   // ========== INIT ==========
   try {
     initThree();
+    hideHUD();
+    updateMenuStats();
     gameState.lastTime=performance.now();
     animate(gameState.lastTime);
     inGameMessage('🎮 ¡Bienvenido! Usa WASD + Ratón. Shift = Drift', 4000);
