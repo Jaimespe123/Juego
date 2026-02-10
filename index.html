@@ -131,6 +131,10 @@
               <span class="btn-icon">🧟</span>
               <span class="btn-text">Zombies</span>
             </button>
+            <button class="btn-hero secondary" id="openAchievements">
+              <span class="btn-icon">🏅</span>
+              <span class="btn-text">Logros</span>
+            </button>
             <button class="btn-hero secondary" id="openLeaderboard">
               <span class="btn-icon">🏆</span>
               <span class="btn-text">Records</span>
@@ -362,6 +366,26 @@
 
       <div class="shop-actions">
         <button class="btn large" id="backFromLeaderboard">
+          ◀️ Volver al Menú
+        </button>
+      </div>
+    </section>
+
+    <!-- PANEL DE LOGROS -->
+    <section id="overlayAchievements" class="overlay" style="display:none; max-width: 900px;" role="dialog" aria-labelledby="achievementsTitle" aria-modal="true">
+      <h1 id="achievementsTitle">🏅 Logros</h1>
+      
+      <p style="color: var(--muted); font-size: 14px; margin-bottom: 20px;">
+        <span id="achievementsProgress">0/10 Completados</span> • 
+        <span id="achievementsCoins">0 💰 Ganados</span>
+      </p>
+
+      <div id="achievementsGrid" class="achievements-grid">
+        <!-- Los logros se generan dinámicamente -->
+      </div>
+
+      <div class="shop-actions">
+        <button class="btn large" id="backFromAchievements">
           ◀️ Volver al Menú
         </button>
       </div>

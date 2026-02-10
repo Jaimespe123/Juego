@@ -30,19 +30,60 @@
 
   // ========== TIPOS DE ZOMBIES ==========
   const ZOMBIE_TYPES = {
-    NORMAL:    { name:'Normal',    color:0x2d5a2d, speed:1.0,  health:1, damage:12, points:10, coins:1, size:1.0 },
-    FAST:      { name:'Rápido',   color:0xff6600, speed:1.8,  health:1, damage:8,  points:20, coins:2, size:0.8 },
-    TANK:      { name:'Tanque',   color:0x8b0000, speed:0.6,  health:3, damage:25, points:50, coins:5, size:1.5 },
-    EXPLOSIVE: { name:'Explosivo',color:0xffff00, speed:1.2,  health:1, damage:30, points:40, coins:3, size:1.1, explosive:true },
+    NORMAL:    { name:"Normal",    color:0x2d5a2d, speed:1.0,  health:1, damage:12, points:10, coins:1, size:1.0, emoji:"🧟" },
+    FAST:      { name:"Rápido",   color:0xff6600, speed:1.8,  health:1, damage:8,  points:20, coins:2, size:0.8, emoji:"🧟‍♂️" },
+    TANK:      { name:"Tanque",   color:0x8b0000, speed:0.6,  health:3, damage:25, points:50, coins:5, size:1.5, emoji:"🧟‍♀️" },
+    EXPLOSIVE: { name:"Explosivo",color:0xffff00, speed:1.2,  health:1, damage:30, points:40, coins:3, size:1.1, explosive:true, emoji:"💣" },
+    POISON:    { name:"Venenoso", color:0x9d4edd, speed:1.1,  health:1, damage:8,  points:30, coins:3, size:1.0, poison:true, emoji:"☠️" },
+    INVISIBLE: { name:"Invisible",color:0x7dd3fc, speed:1.3,  health:1, damage:15, points:35, coins:4, size:0.9, invisible:true, emoji:"👻" },
+    GIANT:     { name:"Gigante",  color:0x4a4a4a, speed:0.4,  health:5, damage:40, points:100,coins:10,size:2.2, emoji:"🦍" },
+
+  };
+  // ========== SISTEMA DE LOGROS ==========
+  const ACHIEVEMENTS = {
+    FIRST_BLOOD:   { id:'first_blood',   name:'Primera Sangre',    desc:'Mata tu primer zombie',          reward:50,   icon:'🩸' },
+    COMBO_MASTER:  { id:'combo_master',  name:'Maestro del Combo', desc:'Consigue combo x20',             reward:200,  icon:'🔥' },
+    SPEED_DEMON:   { id:'speed_demon',   name:'Demonio Velocidad', desc:'Alcanza 150 km/h',               reward:100,  icon:'⚡' },
+    SURVIVOR:      { id:'survivor',      name:'Sobreviviente',     desc:'Sobrevive 3 minutos',            reward:300,  icon:'⏱️' },
+    MILLIONAIRE:   { id:'millionaire',   name:'Millonario',        desc:'Acumula 1000 monedas totales',   reward:500,  icon:'💰' },
+    WAVE_WARRIOR:  { id:'wave_warrior',  name:'Guerrero Oleadas',  desc:'Alcanza oleada 10',              reward:400,  icon:'🌊' },
+    NITRO_ADDICT:  { id:'nitro_addict',  name:'Adicto al Nitro',   desc:'Usa nitro 50 veces',             reward:150,  icon:'💨' },
+    SHOPPING_spree:{ id:'shopping_spree',name:'Comprador',         desc:'Compra 5 colores diferentes',    reward:250,  icon:'🛒' },
+    ZOMBIE_SLAYER: { id:'zombie_slayer', name:'Cazador Zombies',   desc:'Mata 500 zombies en total',      reward:600,  icon:'🎯' },
+    PERFECT_DRIVER:{ id:'perfect_driver',name:'Conductor Perfecto',desc:'Termina sin recibir daño',        reward:800,  icon:'👑' },
+  };
+
+  const STORAGE_KEY = 'carVsZombies_playerData';
+  const ACHIEVEMENTS_KEY = 'carVsZombies_achievements';
+
+  let sessionStats = {
+    totalKills: 0,
+    maxCombo: 0,
+    maxSpeed: 0,
+    survivalTime: 0,
+    maxWave: 0,
+    nitroUses: 0,
+    damageTaken: 0,
+    noDamageRun: true,
+  };
+
+  const dayNightCycle = {
+    enabled: true,
+    time: 0,
+    speed: 0.00005,
   };
 
   // ========== POWER-UPS ==========
   const POWERUP_TYPES = {
-    HEALTH: { name:'Vida',  color:0x00ff00, icon:'❤️',  duration:0,     effect:'heal' },
-    SHIELD: { name:'Escudo',color:0x00ffff, icon:'🛡️',  duration:8000,  effect:'shield' },
-    TURBO:  { name:'Turbo', color:0xff6600, icon:'⚡',  duration:6000,  effect:'turbo' },
-    MAGNET: { name:'Imán',  color:0xffdd00, icon:'🧲',  duration:10000, effect:'magnet' },
-    WEAPON: { name:'Arma',  color:0xff0000, icon:'🔫',  duration:15000, effect:'weapon' },
+    HEALTH:      { name:"Vida",         color:0x00ff00, icon:"❤️",  duration:0,     effect:"heal" },
+    SHIELD:      { name:"Escudo",       color:0x00ffff, icon:"🛡️",  duration:8000,  effect:"shield" },
+    TURBO:       { name:"Turbo",        color:0xff6600, icon:"⚡",  duration:6000,  effect:"turbo" },
+    MAGNET:      { name:"Imán",         color:0xffdd00, icon:"🧲",  duration:10000, effect:"magnet" },
+    WEAPON:      { name:"Arma",         color:0xff0000, icon:"🔫",  duration:15000, effect:"weapon" },
+    SLOWMO:      { name:"Slow Motion",  color:0x9d4edd, icon:"⏱️",  duration:7000,  effect:"slowmo" },
+    FREEZE:      { name:"Congelar",     color:0x7dd3fc, icon:"🧊",  duration:5000,  effect:"freeze" },
+    DOUBLECOINS: { name:"Doble Monedas",color:0xffd700, icon:"💎",  duration:12000, effect:"doublecoins" },
+
   };
 
   // ========== TIENDA ==========
@@ -68,10 +109,9 @@
     coinMultiplier: { name:'Multiplicador Monedas', baseCost:600, level:0, maxLevel:3, bonus:0.5 },
   };
 
-  const STORAGE_KEY = 'carVsZombies_playerData';
-
-  // ========== ESTADO DEL JUEGO ==========
   const gameState = {
+    hasSlowMo:false, hasFreezeEffect:false, hasDoubleCoins:false,
+    poisonDamageTimer:0, poisonActive:false, startTime:0,
     running:false, paused:false,
     score:0, hp:100, maxHp:100,
     lastSpawn:0, lastTime:0,
@@ -99,6 +139,8 @@
     totalCoins:0, ownedColors:[0], currentColorIndex:0,
     mouseSensitivity:1, bestScore:0, totalKills:0, gamesPlayed:0,
     upgrades: JSON.parse(JSON.stringify(SHOP_UPGRADES)),
+    achievements: {},
+    stats: { totalKills: 0, maxCombo: 0, maxSpeed: 0, totalSurvivalTime: 0, maxWave: 0, nitroUses: 0, colorsOwned: 1 },
   };
 
   // ========== GESTIÓN DE DATOS ==========
@@ -306,6 +348,49 @@
     } catch(e){}
   }
 
+  // ========== AUDIO MEJORADO ==========
+  function playZombieDeathSfx(){
+    if(!audioCtx || !audioNodes.sfx) return;
+    const freq = 80 + Math.random()*40;
+    playSound(freq, 0.2, 'sawtooth', 0.4);
+    setTimeout(()=>playSound(freq*0.7, 0.15, 'sine', 0.3), 50);
+  }
+
+  function playPoisonSfx(){
+    if(!audioCtx || !audioNodes.sfx) return;
+    playSound(300 + Math.random()*100, 0.3, 'sine', 0.25);
+  }
+
+  function playFreezeSfx(){
+    if(!audioCtx || !audioNodes.sfx) return;
+    playSound(800, 0.1, 'square', 0.3);
+    setTimeout(()=>playSound(600, 0.1, 'square', 0.3), 100);
+    setTimeout(()=>playSound(400, 0.2, 'square', 0.3), 200);
+  }
+
+  function playSlowMoSfx(){
+    if(!audioCtx || !audioNodes.sfx) return;
+    playSound(200, 0.4, 'sine', 0.2);
+    playSound(150, 0.6, 'sine', 0.15);
+  }
+
+  function playAchievementSfx(){
+    if(!audioCtx || !audioNodes.sfx) return;
+    playSound(800, 0.2, 'sine', 0.5);
+    setTimeout(()=>playSound(1000, 0.2, 'sine', 0.5), 100);
+    setTimeout(()=>playSound(1200, 0.3, 'sine', 0.5), 200);
+  }
+
+  function playHitSfx(){
+    if(!audioCtx || !audioNodes.sfx) return;
+    playSound(150 + Math.random()*50, 0.12, 'sawtooth', 0.35);
+  }
+
+  function playCoinSfx(){
+    if(!audioCtx || !audioNodes.sfx) return;
+    playSound(800, 0.08, 'sine', 0.3);
+    setTimeout(()=>playSound(1000, 0.08, 'sine', 0.25), 50);
+  }
   // ========== CONTROLES DE AUDIO UI ==========
   volMaster.addEventListener('input', e=>{ elements.volMasterVal.innerText=Math.round(e.target.value*100)+'%'; updateAudioGains(); });
   volEngine.addEventListener('input', e=>{ elements.volEngineVal.innerText=Math.round(e.target.value*100)+'%'; updateAudioGains(); });
@@ -402,6 +487,160 @@
     if(menuGames) menuGames.textContent = playerData.gamesPlayed || 0;
   }
 
+  // ========== GESTIÓN DE LOGROS ==========
+  function loadAchievements(){
+    try {
+      const saved = localStorage.getItem(ACHIEVEMENTS_KEY);
+      if(saved){
+        playerData.achievements = JSON.parse(saved);
+      } else {
+        playerData.achievements = {};
+      }
+    } catch(e){ console.warn('Error cargando logros:', e); playerData.achievements = {}; }
+  }
+
+  function saveAchievements(){
+    try {
+      localStorage.setItem(ACHIEVEMENTS_KEY, JSON.stringify(playerData.achievements));
+    } catch(e){ console.warn('Error guardando logros:', e); }
+  }
+
+  function checkAchievements(){
+    const stats = {
+      totalKills: playerData.stats ? playerData.stats.totalKills : playerData.totalKills,
+      maxCombo: sessionStats.maxCombo,
+      maxSpeed: sessionStats.maxSpeed,
+      survivalTime: sessionStats.survivalTime,
+      totalCoins: playerData.totalCoins,
+      maxWave: sessionStats.maxWave,
+      nitroUses: playerData.stats ? playerData.stats.nitroUses : 0,
+      colorsOwned: playerData.ownedColors.length,
+      noDamageRun: sessionStats.noDamageRun,
+    };
+
+    Object.entries(ACHIEVEMENTS).forEach(([key, achievement]) => {
+      if(playerData.achievements[achievement.id]) return;
+
+      let unlocked = false;
+      
+      if(achievement.id === 'first_blood' && stats.totalKills >= 1) unlocked = true;
+      if(achievement.id === 'combo_master' && stats.maxCombo >= 20) unlocked = true;
+      if(achievement.id === 'speed_demon' && stats.maxSpeed >= 150) unlocked = true;
+      if(achievement.id === 'survivor' && stats.survivalTime >= 180) unlocked = true;
+      if(achievement.id === 'millionaire' && stats.totalCoins >= 1000) unlocked = true;
+      if(achievement.id === 'wave_warrior' && stats.maxWave >= 10) unlocked = true;
+      if(achievement.id === 'nitro_addict' && stats.nitroUses >= 50) unlocked = true;
+      if(achievement.id === 'shopping_spree' && stats.colorsOwned >= 5) unlocked = true;
+      if(achievement.id === 'zombie_slayer' && stats.totalKills >= 500) unlocked = true;
+      if(achievement.id === 'perfect_driver' && stats.noDamageRun && gameState.kills >= 50) unlocked = true;
+
+      if(unlocked){
+        playerData.achievements[achievement.id] = {
+          unlocked: true,
+          timestamp: Date.now()
+        };
+        playerData.totalCoins += achievement.reward;
+        saveAchievements();
+        savePlayerData();
+        showAchievementNotification(achievement);
+        playAchievementSfx();
+      }
+    });
+  }
+
+  function showAchievementNotification(achievement){
+    const notification = document.createElement('div');
+    notification.className = 'achievement-notification';
+    notification.innerHTML = `
+      <div class="achievement-icon">${achievement.icon}</div>
+      <div class="achievement-content">
+        <div class="achievement-title">¡Logro Desbloqueado!</div>
+        <div class="achievement-name">${achievement.name}</div>
+        <div class="achievement-reward">+${achievement.reward} 💰</div>
+      </div>
+    `;
+    document.body.appendChild(notification);
+    
+    setTimeout(() => {
+      notification.classList.add('show');
+    }, 100);
+
+    setTimeout(() => {
+      notification.classList.remove('show');
+      setTimeout(() => notification.remove(), 500);
+    }, 4000);
+  }
+
+  function renderAchievements(){
+    const grid = document.getElementById('achievementsGrid');
+    if(!grid) return;
+
+    grid.innerHTML = '';
+    let unlockedCount = 0;
+    let totalRewards = 0;
+
+    const stats = {
+      totalKills: playerData.stats ? playerData.stats.totalKills : playerData.totalKills,
+      totalCoins: playerData.totalCoins,
+      colorsOwned: playerData.ownedColors.length,
+      nitroUses: playerData.stats ? playerData.stats.nitroUses : 0,
+      maxCombo: playerData.stats ? playerData.stats.maxCombo : 0,
+      maxSpeed: playerData.stats ? playerData.stats.maxSpeed : 0,
+      maxWave: playerData.stats ? playerData.stats.maxWave : 0,
+    };
+
+    Object.entries(ACHIEVEMENTS).forEach(([key, achievement]) => {
+      const unlocked = playerData.achievements[achievement.id]?.unlocked || false;
+      if(unlocked) {
+        unlockedCount++;
+        totalRewards += achievement.reward;
+      }
+
+      let current = 0;
+      let target = 1;
+      let showProgress = false;
+
+      if(achievement.id === 'first_blood') { current = stats.totalKills; target = 1; showProgress = !unlocked; }
+      if(achievement.id === 'combo_master') { current = stats.maxCombo; target = 20; showProgress = !unlocked; }
+      if(achievement.id === 'speed_demon') { current = stats.maxSpeed; target = 150; showProgress = !unlocked; }
+      if(achievement.id === 'millionaire') { current = stats.totalCoins; target = 1000; showProgress = !unlocked; }
+      if(achievement.id === 'wave_warrior') { current = stats.maxWave; target = 10; showProgress = !unlocked; }
+      if(achievement.id === 'nitro_addict') { current = stats.nitroUses; target = 50; showProgress = !unlocked; }
+      if(achievement.id === 'shopping_spree') { current = stats.colorsOwned; target = 5; showProgress = !unlocked; }
+      if(achievement.id === 'zombie_slayer') { current = stats.totalKills; target = 500; showProgress = !unlocked; }
+
+      const percentage = Math.min(100, (current / target) * 100);
+
+      const card = document.createElement('div');
+      card.className = 'achievement-card ' + (unlocked ? 'unlocked' : 'locked');
+      card.innerHTML = `
+        <div class="achievement-card-header">
+          <div class="achievement-card-icon">${achievement.icon}</div>
+          <div class="achievement-card-info">
+            <h3>${achievement.name}</h3>
+          </div>
+        </div>
+        <div class="achievement-card-desc">${achievement.desc}</div>
+        ${showProgress ? `
+          <div class="achievement-progress-bar">
+            <div class="achievement-progress-fill" style="width: ${percentage}%"></div>
+          </div>
+          <div class="achievement-progress-text">${Math.min(current, target)}/${target}</div>
+        ` : ''}
+        <div class="achievement-card-reward">
+          <span>${unlocked ? '✓ Completado' : 'Bloqueado'}</span>
+          <span class="achievement-reward-amount">${achievement.reward} 💰</span>
+        </div>
+      `;
+      grid.appendChild(card);
+    });
+
+    // Actualizar header
+    const progress = document.getElementById('achievementsProgress');
+    const coins = document.getElementById('achievementsCoins');
+    if(progress) progress.textContent = `${unlockedCount}/${Object.keys(ACHIEVEMENTS).length} Completados`;
+    if(coins) coins.textContent = `${totalRewards} 💰 Ganados`;
+  }
 
   function updateCarColor(colorIndex){
     if(!car) return;
@@ -425,6 +664,7 @@
   if(elements.backFromZombieInfo) elements.backFromZombieInfo.addEventListener('click', ()=>{ elements.overlayZombieInfo.style.display='none'; overlayMenu.style.display='block'; updateMenuStats(); showBackgroundCanvas(); hideHUD(); });
 
   loadPlayerData();
+  loadAchievements();
   updateMenuStats();
 
   // ========== THREE.JS GLOBALS ==========
@@ -1290,6 +1530,8 @@
 
     // --- HUD velocidad ---
     speedEl.textContent = Math.round(speed*60)+' km/h';
+    const currentSpeed = Math.round(speed*60);
+    if(currentSpeed > sessionStats.maxSpeed) sessionStats.maxSpeed = currentSpeed;
 
     // --- Polvo por frenado / drift ---
     const now = performance.now();
@@ -1392,6 +1634,7 @@
     addScore(zombie.userData.type.points * getComboMultiplier());
     addCoins(zombie.userData.type.coins);
     gameState.kills++;
+    checkAchievements();
     gameState.zombiesKilledThisWave++;
 
     // Partículas de muerte
@@ -1586,6 +1829,9 @@
     dustGeom.attributes.aLifetime.needsUpdate=true;
 
     if(gameState.running && !gameState.paused){
+      // Track survival time
+      if(!gameState.startTime) gameState.startTime = now;
+      sessionStats.survivalTime = (now - gameState.startTime) / 1000;
       // --- DIFICULTAD PROGRESIVA ---
       const wave=gameState.wave;
       let spawnDelay, maxZombies, zombieSpeedMult;
@@ -1625,6 +1871,7 @@
       // Oleadas
       if(gameState.zombiesKilledThisWave>=20){
         gameState.wave++;
+        if(gameState.wave > sessionStats.maxWave) sessionStats.maxWave = gameState.wave;
         gameState.zombiesKilledThisWave=0;
         inGameMessage(`🌊 ¡Oleada ${gameState.wave}!`, 2000);
         playPowerupSfx();
@@ -1702,6 +1949,9 @@
     gameState.lastSpawn=performance.now();
     gameState.powerups.clear();
     gameState.hasShield=false; gameState.hasTurbo=false; gameState.hasMagnet=false; gameState.hasWeapon=false;
+    gameState.hasSlowMo=false; gameState.hasFreezeEffect=false; gameState.hasDoubleCoins=false;
+    gameState.poisonActive=false; gameState.poisonDamageTimer=0; gameState.startTime=0;
+    sessionStats = { totalKills: 0, maxCombo: 0, maxSpeed: 0, survivalTime: 0, maxWave: 0, nitroUses: 0, damageTaken: 0, noDamageRun: true };
 
     carState.nitro=carState.maxNitro;
     if(!carState.velocity) carState.velocity=new THREE.Vector3();
@@ -1781,3 +2031,25 @@
   }
 
 })();
+  // Event Listeners de Logros
+  const openAchievements = document.getElementById('openAchievements');
+  const backFromAchievements = document.getElementById('backFromAchievements');
+  const overlayAchievements = document.getElementById('overlayAchievements');
+  
+  if(openAchievements){
+    openAchievements.addEventListener('click', ()=>{
+      overlayMenu.style.display='none';
+      renderAchievements();
+      if(overlayAchievements) overlayAchievements.style.display='block';
+    });
+  }
+  
+  if(backFromAchievements){
+    backFromAchievements.addEventListener('click', ()=>{
+      if(overlayAchievements) overlayAchievements.style.display='none';
+      overlayMenu.style.display='block';
+      updateMenuStats();
+      showBackgroundCanvas();
+      hideHUD();
+    });
+  }
