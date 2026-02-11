@@ -7,7 +7,15 @@
   <meta name="theme-color" content="#1a2a36">
   <title>Car vs Zombies – Juego de Acción Ultra</title>
   <link rel="stylesheet" href="styles.css">
-  <link rel="preconnect" href="https://unpkg.com">
+  
+  <!-- Import Maps para Three.js (opcional, si usas CDN modular) -->
+  <script type="importmap">
+  {
+    "imports": {
+      "three": "https://cdn.jsdelivr.net/npm/three@0.152.2/build/three.module.js"
+    }
+  }
+  </script>
 </head>
 <body>
   <div id="container" role="main">
@@ -57,7 +65,7 @@
       <!-- Los power-ups activos aparecerán aquí -->
     </div>
 
-    <!-- Mini-mapa (Inferior Izquierda) -->
+    <!-- Mini-mapa -->
     <canvas id="minimap" width="160" height="160" 
             style="position: absolute; bottom: 12px; left: 12px; z-index: 45; 
                    border: 3px solid var(--accent); border-radius: 12px; 
@@ -77,13 +85,11 @@
       </button>
     </nav>
 
-    <!-- MENÚ PRINCIPAL MEJORADO -->
+    <!-- MENÚ PRINCIPAL -->
     <section id="overlayMenu" class="overlay hero-menu" role="dialog" aria-labelledby="menuTitle" aria-modal="true">
-      <!-- Efecto de fondo con líneas de carretera -->
       <div class="road-lines"></div>
       
       <div class="hero-content">
-        <!-- Logo del juego con efecto neón -->
         <div class="game-logo">
           <div class="logo-icon">🚗</div>
           <h1 id="menuTitle" class="neon-text">
@@ -95,7 +101,6 @@
           </p>
         </div>
 
-        <!-- Estadísticas rápidas -->
         <div class="quick-stats">
           <div class="stat-card">
             <div class="stat-icon">🏆</div>
@@ -114,7 +119,6 @@
           </div>
         </div>
         
-        <!-- Botones principales con efectos -->
         <div class="menu-actions">
           <button class="btn-hero primary pulse" id="startBtn">
             <span class="btn-icon">▶️</span>
@@ -146,7 +150,6 @@
           </div>
         </div>
         
-        <!-- Controles compactos -->
         <div class="controls-compact">
           <div class="control-tip">
             <kbd>WASD</kbd> <span>Movimiento</span>
@@ -162,15 +165,14 @@
           </div>
         </div>
 
-        <!-- Footer con versión -->
         <div class="menu-footer">
-          <div class="version">Version ULTRA v2.0</div>
+          <div class="version">Version ULTRA v2.0 (Modular)</div>
           <div class="credit">🎮 Mejor en Desktop • <kbd>F11</kbd> Pantalla Completa</div>
         </div>
       </div>
     </section>
 
-    <!-- TIENDA DE COLORES Y MEJORAS -->
+    <!-- TIENDA -->
     <section id="overlayShop" class="overlay shop-overlay" style="display:none" role="dialog" aria-labelledby="shopTitle" aria-modal="true">
       <h1 id="shopTitle">🛒 Tienda & Mejoras</h1>
       
@@ -182,17 +184,13 @@
       </div>
 
       <h2 style="margin-top: 16px; font-size: 18px; color: var(--accent);">🎨 Colores</h2>
-      <div id="shopGrid" class="shop-grid" role="list" aria-label="Colores disponibles">
-        <!-- Los colores se generan dinámicamente aquí -->
-      </div>
+      <div id="shopGrid" class="shop-grid" role="list" aria-label="Colores disponibles"></div>
 
       <h2 style="margin-top: 24px; font-size: 18px; color: var(--accent);">⬆️ Mejoras Permanentes</h2>
       <p style="font-size: 13px; color: var(--muted); margin-bottom: 12px;">
         Las mejoras son permanentes y se aplican a todas tus partidas
       </p>
-      <div id="upgradesGrid" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 12px; margin: 16px 0;">
-        <!-- Las mejoras se generan dinámicamente aquí -->
-      </div>
+      <div id="upgradesGrid" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 12px; margin: 16px 0;"></div>
 
       <div class="shop-actions">
         <button class="btn large" id="backFromShop">
@@ -204,147 +202,12 @@
     <!-- INFORMACIÓN DE ZOMBIES -->
     <section id="overlayZombieInfo" class="overlay" style="display:none; max-width: 700px;" role="dialog" aria-labelledby="zombieInfoTitle" aria-modal="true">
       <h1 id="zombieInfoTitle">🧟 Tipos de Zombies</h1>
-      
       <p style="color: var(--muted); font-size: 14px; margin-bottom: 20px;">
         Conoce a tus enemigos y sus características
       </p>
-
       <div class="zombie-info-grid">
-        <!-- Zombie Normal -->
-        <div class="zombie-info-card" style="border-color: #2d5a2d;">
-          <div class="zombie-icon" style="background: #2d5a2d;">🧟</div>
-          <h3 style="color: #2d5a2d;">Zombie Normal</h3>
-          <div class="zombie-stats">
-            <div class="stat-row">
-              <span class="stat-label">Velocidad:</span>
-              <span class="stat-value">⭐⭐⭐</span>
-            </div>
-            <div class="stat-row">
-              <span class="stat-label">Vida:</span>
-              <span class="stat-value">⭐</span>
-            </div>
-            <div class="stat-row">
-              <span class="stat-label">Daño:</span>
-              <span class="stat-value">12 HP</span>
-            </div>
-            <div class="stat-row">
-              <span class="stat-label">Puntos:</span>
-              <span class="stat-value">10 pts</span>
-            </div>
-            <div class="stat-row">
-              <span class="stat-label">Monedas:</span>
-              <span class="stat-value">💰 1</span>
-            </div>
-          </div>
-          <p class="zombie-desc">
-            El zombie estándar. Velocidad y daño moderados. Perfecto para practicar combos.
-          </p>
-        </div>
-
-        <!-- Zombie Rápido -->
-        <div class="zombie-info-card" style="border-color: #ff6600;">
-          <div class="zombie-icon" style="background: #ff6600;">🧟‍♂️</div>
-          <h3 style="color: #ff6600;">Zombie Rápido</h3>
-          <div class="zombie-stats">
-            <div class="stat-row">
-              <span class="stat-label">Velocidad:</span>
-              <span class="stat-value">⭐⭐⭐⭐⭐</span>
-            </div>
-            <div class="stat-row">
-              <span class="stat-label">Vida:</span>
-              <span class="stat-value">⭐</span>
-            </div>
-            <div class="stat-row">
-              <span class="stat-label">Daño:</span>
-              <span class="stat-value">8 HP</span>
-            </div>
-            <div class="stat-row">
-              <span class="stat-label">Puntos:</span>
-              <span class="stat-value">20 pts</span>
-            </div>
-            <div class="stat-row">
-              <span class="stat-label">Monedas:</span>
-              <span class="stat-value">💰 2</span>
-            </div>
-          </div>
-          <p class="zombie-desc">
-            Muy rápido pero frágil. Difícil de alcanzar, pero vale más puntos.
-          </p>
-        </div>
-
-        <!-- Zombie Tanque -->
-        <div class="zombie-info-card" style="border-color: #8b0000;">
-          <div class="zombie-icon" style="background: #8b0000;">🧟‍♀️</div>
-          <h3 style="color: #8b0000;">Zombie Tanque</h3>
-          <div class="zombie-stats">
-            <div class="stat-row">
-              <span class="stat-label">Velocidad:</span>
-              <span class="stat-value">⭐⭐</span>
-            </div>
-            <div class="stat-row">
-              <span class="stat-label">Vida:</span>
-              <span class="stat-value">⭐⭐⭐</span>
-            </div>
-            <div class="stat-row">
-              <span class="stat-label">Daño:</span>
-              <span class="stat-value">25 HP</span>
-            </div>
-            <div class="stat-row">
-              <span class="stat-label">Puntos:</span>
-              <span class="stat-value">50 pts</span>
-            </div>
-            <div class="stat-row">
-              <span class="stat-label">Monedas:</span>
-              <span class="stat-value">💰 5</span>
-            </div>
-          </div>
-          <p class="zombie-desc">
-            <strong>¡PELIGROSO!</strong> Lento pero resistente. Necesita 3 golpes para morir. Hace mucho daño.
-          </p>
-        </div>
-
-        <!-- Zombie Explosivo -->
-        <div class="zombie-info-card" style="border-color: #ffff00;">
-          <div class="zombie-icon" style="background: #ffff00; color: #000;">💣</div>
-          <h3 style="color: #ffff00;">Zombie Explosivo</h3>
-          <div class="zombie-stats">
-            <div class="stat-row">
-              <span class="stat-label">Velocidad:</span>
-              <span class="stat-value">⭐⭐⭐⭐</span>
-            </div>
-            <div class="stat-row">
-              <span class="stat-label">Vida:</span>
-              <span class="stat-value">⭐</span>
-            </div>
-            <div class="stat-row">
-              <span class="stat-label">Daño:</span>
-              <span class="stat-value">30 HP</span>
-            </div>
-            <div class="stat-row">
-              <span class="stat-label">Puntos:</span>
-              <span class="stat-value">40 pts</span>
-            </div>
-            <div class="stat-row">
-              <span class="stat-label">Monedas:</span>
-              <span class="stat-value">💰 3</span>
-            </div>
-          </div>
-          <p class="zombie-desc">
-            <strong>⚠️ ¡CUIDADO!</strong> Explota al morir o al chocar. Mantén tu distancia o usa el escudo.
-          </p>
-        </div>
+        <!-- Se llenará dinámicamente -->
       </div>
-
-      <div class="zombie-tips">
-        <h3>💡 Consejos de Combate</h3>
-        <ul>
-          <li><strong>Zombies Normales:</strong> Úsalos para mantener tu combo alto</li>
-          <li><strong>Zombies Rápidos:</strong> Prioriza esquivarlos, valen muchos puntos</li>
-          <li><strong>Zombies Tanque:</strong> Usa el arma o evítalos si no tienes escudo</li>
-          <li><strong>Zombies Explosivos:</strong> ¡NUNCA los mates de frente! Usa el arma desde lejos</li>
-        </ul>
-      </div>
-
       <div class="shop-actions">
         <button class="btn large" id="backFromZombieInfo">
           ◀️ Volver al Menú
@@ -352,40 +215,26 @@
       </div>
     </section>
 
-    <!-- TABLA DE CLASIFICACIÓN -->
-    <section id="overlayLeaderboard" class="overlay" style="display:none; max-width: 600px;" role="dialog" aria-labelledby="leaderboardTitle" aria-modal="true">
-      <h1 id="leaderboardTitle">🏆 Tabla de Clasificación</h1>
-      
+    <!-- LOGROS -->
+    <section id="overlayAchievements" class="overlay" style="display:none; max-width: 800px;" role="dialog" aria-labelledby="achievementsTitle" aria-modal="true">
+      <h1 id="achievementsTitle">🏅 Logros</h1>
       <p style="color: var(--muted); font-size: 14px; margin-bottom: 20px;">
-        Top 10 mejores puntuaciones
+        Completa desafíos para ganar monedas extra
       </p>
-
-      <div id="leaderboardContent" style="min-height: 300px;">
-        <!-- Las entradas se generan dinámicamente -->
-      </div>
-
+      <div id="achievementsGrid" class="achievements-grid"></div>
       <div class="shop-actions">
-        <button class="btn large" id="backFromLeaderboard">
+        <button class="btn large" id="backFromAchievements">
           ◀️ Volver al Menú
         </button>
       </div>
     </section>
 
-    <!-- PANEL DE LOGROS -->
-    <section id="overlayAchievements" class="overlay" style="display:none; max-width: 900px;" role="dialog" aria-labelledby="achievementsTitle" aria-modal="true">
-      <h1 id="achievementsTitle">🏅 Logros</h1>
-      
-      <p style="color: var(--muted); font-size: 14px; margin-bottom: 20px;">
-        <span id="achievementsProgress">0/10 Completados</span> • 
-        <span id="achievementsCoins">0 💰 Ganados</span>
-      </p>
-
-      <div id="achievementsGrid" class="achievements-grid">
-        <!-- Los logros se generan dinámicamente -->
-      </div>
-
+    <!-- LEADERBOARD -->
+    <section id="overlayLeaderboard" class="overlay" style="display:none;" role="dialog" aria-labelledby="leaderboardTitle" aria-modal="true">
+      <h1 id="leaderboardTitle">🏆 Tabla de Récords</h1>
+      <div id="leaderboardContent"></div>
       <div class="shop-actions">
-        <button class="btn large" id="backFromAchievements">
+        <button class="btn large" id="backFromLeaderboard">
           ◀️ Volver al Menú
         </button>
       </div>
@@ -430,16 +279,7 @@
             🔊 Volumen maestro
             <span id="volMasterVal" class="setting-value">80%</span>
           </label>
-          <input 
-            id="volMaster" 
-            type="range" 
-            min="0" 
-            max="1" 
-            step="0.01" 
-            value="0.8"
-            aria-valuemin="0"
-            aria-valuemax="100"
-            aria-valuenow="80">
+          <input id="volMaster" type="range" min="0" max="1" step="0.01" value="0.8">
         </div>
         
         <div class="setting">
@@ -447,16 +287,7 @@
             🏎️ Volumen motor
             <span id="volEngineVal" class="setting-value">80%</span>
           </label>
-          <input 
-            id="volEngine" 
-            type="range" 
-            min="0" 
-            max="1" 
-            step="0.01" 
-            value="0.8"
-            aria-valuemin="0"
-            aria-valuemax="100"
-            aria-valuenow="80">
+          <input id="volEngine" type="range" min="0" max="1" step="0.01" value="0.8">
         </div>
         
         <div class="setting">
@@ -464,16 +295,7 @@
             💥 Volumen efectos
             <span id="volSfxVal" class="setting-value">90%</span>
           </label>
-          <input 
-            id="volSfx" 
-            type="range" 
-            min="0" 
-            max="1" 
-            step="0.01" 
-            value="0.9"
-            aria-valuemin="0"
-            aria-valuemax="100"
-            aria-valuenow="90">
+          <input id="volSfx" type="range" min="0" max="1" step="0.01" value="0.9">
         </div>
         
         <div class="setting">
@@ -481,16 +303,7 @@
             🖱️ Sensibilidad del ratón
             <span id="mouseSensitivityVal" class="setting-value">100%</span>
           </label>
-          <input 
-            id="mouseSensitivity" 
-            type="range" 
-            min="0.1" 
-            max="2" 
-            step="0.1" 
-            value="1"
-            aria-valuemin="10"
-            aria-valuemax="200"
-            aria-valuenow="100">
+          <input id="mouseSensitivity" type="range" min="0.1" max="2" step="0.1" value="1">
         </div>
       </div>
       
@@ -503,7 +316,7 @@
     <div id="inGameMsg" role="status" aria-live="polite"></div>
   </div>
 
-  <!-- Three.js y dependencias -->
+  <!-- Three.js (versión clásica UMD - puedes cambiar a módulos si prefieres) -->
   <script src="https://unpkg.com/three@0.152.2/build/three.min.js"></script>
   <script src="https://unpkg.com/three@0.152.2/examples/js/loaders/GLTFLoader.js"></script>
   <script src="https://unpkg.com/three@0.152.2/examples/js/postprocessing/EffectComposer.js"></script>
@@ -542,7 +355,6 @@
         update() {
           this.x += this.vx;
           this.y += this.vy;
-
           if (this.x < 0 || this.x > w) this.vx *= -1;
           if (this.y < 0 || this.y > h) this.vy *= -1;
         }
@@ -572,7 +384,6 @@
           p.draw();
         });
 
-        // Conexiones entre partículas cercanas
         for (let i = 0; i < particles.length; i++) {
           for (let j = i + 1; j < particles.length; j++) {
             const dx = particles[i].x - particles[j].x;
@@ -599,7 +410,7 @@
     })();
   </script>
   
-  <!-- Aplicación principal ULTRA -->
-  <script src="app.js"></script>
+  <!-- Aplicación principal usando ES6 Modules -->
+  <script type="module" src="main.js"></script>
 </body>
 </html>
