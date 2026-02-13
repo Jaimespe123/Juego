@@ -1984,3 +1984,20 @@ kbd {
     transform: translate(-50%, -50%) scale(1);
   }
 }
+/* ========== POWERUPS ACTIVOS HUD ========== */
+.active-powerup {
+  background: rgba(12, 18, 28, 0.9);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-md);
+  padding: 8px;
+  width: 64px;
+}
+
+.powerup-timer {
+  margin-top: 6px;
+  height: 4px;
+  border-radius: 4px;
+  background: linear-gradient(90deg, #22d463, #ffdd00);
+  transition: width 0.1s linear;
+}

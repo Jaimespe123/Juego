@@ -8,6 +8,7 @@ export class UIManager {
     this.storage = storageManager;
     this.elements = this.initElements();
     this.setupEventListeners();
+    this.setStartButtonMode('start');
   }
 
   initElements() {
@@ -89,6 +90,12 @@ export class UIManager {
     if (this.elements.backFromAchievements) {
       this.elements.backFromAchievements.addEventListener('click', () => this.hideAchievements());
     }
+    if (this.elements.openLeaderboard) {
+      this.elements.openLeaderboard.addEventListener('click', () => this.showLeaderboard());
+    }
+    if (this.elements.backFromLeaderboard) {
+      this.elements.backFromLeaderboard.addEventListener('click', () => this.hideLeaderboard());
+    }
 
     // Ajustes
     if (this.elements.openSettings || this.elements.btnSettings) {
@@ -126,6 +133,23 @@ export class UIManager {
       const val = Math.round(this.elements.mouseSensitivity.value * 100);
       this.elements.mouseSensitivityVal.textContent = val + '%';
     });
+  }
+
+
+  setStartButtonMode(mode = 'start') {
+    if (!this.elements.startBtn) return;
+    const icon = this.elements.startBtn.querySelector('.btn-icon');
+    const text = this.elements.startBtn.querySelector('.btn-text');
+
+    if (mode === 'resume') {
+      if (icon) icon.textContent = '⏯️';
+      if (text) text.textContent = 'REANUDAR PARTIDA';
+      this.elements.startBtn.classList.remove('pulse');
+    } else {
+      if (icon) icon.textContent = '▶️';
+      if (text) text.textContent = 'EMPEZAR PARTIDA';
+      this.elements.startBtn.classList.add('pulse');
+    }
   }
 
   // Mostrar/ocultar elementos
@@ -185,6 +209,21 @@ export class UIManager {
   hideAchievements() {
     if (this.elements.overlayAchievements) {
       this.elements.overlayAchievements.style.display = 'none';
+    }
+    this.showMenu();
+  }
+
+  showLeaderboard() {
+    this.hideMenu();
+    if (this.elements.overlayLeaderboard) {
+      this.elements.overlayLeaderboard.style.display = 'block';
+    }
+    this.renderLeaderboard();
+  }
+
+  hideLeaderboard() {
+    if (this.elements.overlayLeaderboard) {
+      this.elements.overlayLeaderboard.style.display = 'none';
     }
     this.showMenu();
   }
@@ -309,6 +348,31 @@ export class UIManager {
     if (this.elements.menuGames) {
       this.elements.menuGames.textContent = this.storage.playerData.gamesPlayed;
     }
+  }
+
+  renderLeaderboard() {
+    const leaderboardContent = document.getElementById('leaderboardContent');
+    if (!leaderboardContent) return;
+
+    const stats = this.storage.playerData;
+    const rows = [
+      { icon: '🏆', label: 'Mejor puntuación', value: stats.bestScore || 0 },
+      { icon: '💰', label: 'Monedas totales', value: stats.totalCoins || 0 },
+      { icon: '🎯', label: 'Zombies eliminados', value: stats.totalKills || 0 },
+      { icon: '🎮', label: 'Partidas jugadas', value: stats.gamesPlayed || 0 },
+    ];
+
+    leaderboardContent.innerHTML = `
+      <div style="display:grid;gap:10px;margin:12px 0;">
+        ${rows.map((row, idx) => `
+          <div class="lb-row" style="display:flex;justify-content:space-between;align-items:center;background:rgba(255,255,255,.04);padding:10px 12px;border-radius:10px;border:1px solid rgba(255,255,255,.08);">
+            <span style="opacity:.9">${idx + 1}. ${row.icon} ${row.label}</span>
+            <strong style="color:var(--accent)">${row.value}</strong>
+          </div>
+        `).join('')}
+      </div>
+      <p style="color:var(--muted);font-size:13px;">Consejo: mejora tu coche en la tienda para escalar más rápido.</p>
+    `;
   }
 
   // Renderizar tienda
