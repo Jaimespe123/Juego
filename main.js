@@ -1,7 +1,7 @@
 // 🎮 CAR VS ZOMBIES - MÓDULO PRINCIPAL
 // Punto de entrada de la aplicación
 
-import { CONFIG, ZOMBIE_TYPES, POWERUP_TYPES, ACHIEVEMENTS, UPGRADES } from './config.js';
+import { CONFIG, ZOMBIE_TYPES, POWERUP_TYPES, ACHIEVEMENTS, UPGRADES, SHOP_COLORS } from './config.js';
 import { StorageManager } from './storage.js';
 import { UIManager } from './ui.js';
 
@@ -307,7 +307,7 @@ function createCar() {
 
   const bodyGeometry = new THREE.BoxGeometry(1.6, 0.8, 3.2);
   const selectedColor = storage.playerData.selectedColor || 0;
-  const colorHex = CONFIG.SHOP_COLORS?.[selectedColor]?.hex || 0x1f7ad2;
+  const colorHex = SHOP_COLORS?.[selectedColor]?.hex || 0x1f7ad2;
   const bodyMaterial = new THREE.MeshStandardMaterial({
     color: colorHex,
     roughness: 0.3,
@@ -360,7 +360,7 @@ function updateCarColor() {
   if (!body?.material) return;
 
   const selectedColor = storage.playerData.selectedColor || 0;
-  const colorHex = CONFIG.SHOP_COLORS?.[selectedColor]?.hex || 0x1f7ad2;
+  const colorHex = SHOP_COLORS?.[selectedColor]?.hex || 0x1f7ad2;
   body.material.color.setHex(colorHex);
 }
 
@@ -702,10 +702,9 @@ function setupControls() {
       if (gameState.running && !gameState.paused) {
         gameState.paused = true;
         ui.showMenu();
+        ui.setStartButtonMode('resume');
       } else if (gameState.running && gameState.paused) {
-        ui.hideMenu();
-        ui.showHUD();
-        gameState.paused = false;
+        resumeGame();
       }
     }
   });
@@ -725,7 +724,13 @@ function setupControls() {
   });
 
   if (ui.elements.startBtn) {
-    ui.elements.startBtn.addEventListener('click', startGame);
+    ui.elements.startBtn.addEventListener('click', () => {
+      if (gameState.running && gameState.paused) {
+        resumeGame();
+      } else {
+        startGame();
+      }
+    });
   }
   if (ui.elements.playAgain) {
     ui.elements.playAgain.addEventListener('click', () => {
@@ -739,12 +744,14 @@ function setupControls() {
       gameState.running = false;
       gameState.paused = false;
       ui.showMenu();
+      ui.setStartButtonMode('start');
     });
   }
   if (ui.elements.btnOpenMenu) {
     ui.elements.btnOpenMenu.addEventListener('click', () => {
       if (gameState.running) gameState.paused = true;
       ui.showMenu();
+      if (gameState.running) ui.setStartButtonMode('resume');
     });
   }
   if (ui.elements.btnRestart) {
@@ -814,7 +821,7 @@ function animate(now) {
   sessionStats.survivalTime = (now - gameState.startTime) / 1000;
 
   unlockAchievementIfNeeded('survivor', sessionStats.survivalTime >= 180);
-  unlockAchievementIfNeeded('nitro_addict', storage.playerData.gamesPlayed * 0 + sessionStats.nitroUses >= 50);
+  unlockAchievementIfNeeded('nitro_addict', sessionStats.nitroUses >= 50);
   unlockAchievementIfNeeded('millionaire', storage.playerData.totalCoins >= 1000);
   unlockAchievementIfNeeded('perfect_driver', sessionStats.noDamageRun && sessionStats.survivalTime >= 120);
 
@@ -966,6 +973,7 @@ function startGame() {
   ui.hideMenu();
   ui.hideBackgroundCanvas();
   ui.showHUD();
+  ui.setStartButtonMode('start');
 
   resetGame();
   gameState.running = true;
@@ -974,6 +982,16 @@ function startGame() {
 
   if (ui.elements.btnRestart) ui.elements.btnRestart.style.display = 'block';
   ui.showInGameMessage('¡Comienza el juego! Elimina zombies y sobrevive', 2200);
+}
+
+
+function resumeGame() {
+  if (!gameState.running) return;
+  gameState.paused = false;
+  ui.hideMenu();
+  ui.showHUD();
+  ui.setStartButtonMode('start');
+  ui.showInGameMessage('▶️ Reanudado', 1000);
 }
 
 function resetGame() {

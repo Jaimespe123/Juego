@@ -8,6 +8,7 @@ export class UIManager {
     this.storage = storageManager;
     this.elements = this.initElements();
     this.setupEventListeners();
+    this.setStartButtonMode('start');
   }
 
   initElements() {
@@ -132,6 +133,23 @@ export class UIManager {
       const val = Math.round(this.elements.mouseSensitivity.value * 100);
       this.elements.mouseSensitivityVal.textContent = val + '%';
     });
+  }
+
+
+  setStartButtonMode(mode = 'start') {
+    if (!this.elements.startBtn) return;
+    const icon = this.elements.startBtn.querySelector('.btn-icon');
+    const text = this.elements.startBtn.querySelector('.btn-text');
+
+    if (mode === 'resume') {
+      if (icon) icon.textContent = '⏯️';
+      if (text) text.textContent = 'REANUDAR PARTIDA';
+      this.elements.startBtn.classList.remove('pulse');
+    } else {
+      if (icon) icon.textContent = '▶️';
+      if (text) text.textContent = 'EMPEZAR PARTIDA';
+      this.elements.startBtn.classList.add('pulse');
+    }
   }
 
   // Mostrar/ocultar elementos
