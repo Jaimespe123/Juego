@@ -1,7 +1,7 @@
 // 🎮 CAR VS ZOMBIES - VERSIÓN ULTRA MEJORADA 🎮
 // Con física de drifting real, mundo infinito y mejoras de jugabilidad
 
-(function(){
+(function()
   'use strict';
 
   console.log('🚀 Iniciando Car vs Zombies ULTRA...');
