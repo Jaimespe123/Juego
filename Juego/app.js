@@ -429,7 +429,7 @@
 
   // ========== THREE.JS GLOBALS ==========
   let renderer, scene, camera, composer;
-  let car, sun, sunMesh;
+  let car, sun, sunMesh, ambientLight, hemiLight;
   let zombies=[], powerups=[], bullets=[], particles=[], decorations=[];
 
   // Mundo infinito: arrays de chunks
@@ -445,6 +445,66 @@
   // ✅ Mini-mapa
   let minimapCanvas = null;
   let minimapCtx = null;
+
+  const ENVIRONMENT_STAGES = [
+    {
+      name: 'Suburbio soleado',
+      minWave: 1,
+      skyColor: 0x87ceeb,
+      fogDensity: 0.006,
+      sunColor: 0xffe8cc,
+      ambientColor: 0x606878,
+      sideColor: 0x1a3a1a,
+      groundColor: 0x2d5a2d,
+      treeColor: 0x1a6b1a,
+      buildingColor: 0x3a3a4a,
+      lampColor: 0xffeeaa,
+      exposure: 1.2,
+    },
+    {
+      name: 'Atardecer tóxico',
+      minWave: 4,
+      skyColor: 0xff8b55,
+      fogDensity: 0.009,
+      sunColor: 0xffa866,
+      ambientColor: 0x704535,
+      sideColor: 0x4f3c1f,
+      groundColor: 0x5f4c2f,
+      treeColor: 0x7b5f2f,
+      buildingColor: 0x4a3b3a,
+      lampColor: 0xffc58f,
+      exposure: 1.1,
+    },
+    {
+      name: 'Noche neón',
+      minWave: 7,
+      skyColor: 0x131b33,
+      fogDensity: 0.012,
+      sunColor: 0x7fb6ff,
+      ambientColor: 0x28324a,
+      sideColor: 0x102127,
+      groundColor: 0x17313a,
+      treeColor: 0x1f5f68,
+      buildingColor: 0x22304a,
+      lampColor: 0x7fd0ff,
+      exposure: 1.0,
+    },
+    {
+      name: 'Tormenta final',
+      minWave: 10,
+      skyColor: 0x05070d,
+      fogDensity: 0.015,
+      sunColor: 0xe06a6a,
+      ambientColor: 0x1b1f2f,
+      sideColor: 0x111114,
+      groundColor: 0x1c1c22,
+      treeColor: 0x3a3a45,
+      buildingColor: 0x2b2d35,
+      lampColor: 0xff8f8f,
+      exposure: 0.92,
+    },
+  ];
+  let currentEnvironment = null;
 
   // ========== INIT THREE ==========
   function initThree(){
@@ -471,7 +531,7 @@
       camera.position.set(0,8,20);
 
       // ILUMINACIÓN
-      const ambientLight = new THREE.AmbientLight(0x606878, 0.7);
+      ambientLight = new THREE.AmbientLight(0x606878, 0.7);
       scene.add(ambientLight);
 
       sun = new THREE.DirectionalLight(0xffe8cc, 2.0);
@@ -490,7 +550,7 @@
       sunMesh.position.copy(sun.position);
       scene.add(sunMesh);
 
-      const hemiLight = new THREE.HemisphereLight(0x87ceeb, 0x2c3e50, 0.5);
+      hemiLight = new THREE.HemisphereLight(0x87ceeb, 0x2c3e50, 0.5);
       scene.add(hemiLight);
 
       // Post-processing
@@ -502,6 +562,7 @@
 
       // CONSTRUIR MUNDO
       buildInfiniteWorld();
+      applyEnvironmentByWave(1, false);
       createCar();
       initDustSystem();
       initMinimap(); // ✅ Inicializar mini-mapa
@@ -539,6 +600,41 @@
     matLampLight = new THREE.MeshBasicMaterial({ color:0xffeeaa });
     // Edificios
     matBuilding  = new THREE.MeshStandardMaterial({ color:0x3a3a4a, roughness:0.8 });
+  }
+
+  function getEnvironmentForWave(wave){
+    let selected = ENVIRONMENT_STAGES[0];
+    for(const env of ENVIRONMENT_STAGES){
+      if(wave >= env.minWave) selected = env;
+    }
+    return selected;
+  }
+
+  function applyEnvironmentByWave(wave, showMessage = true){
+    const env = getEnvironmentForWave(wave);
+    if(!scene || !env) return;
+    if(currentEnvironment && currentEnvironment.name === env.name) return;
+
+    currentEnvironment = env;
+    scene.background = new THREE.Color(env.skyColor);
+    scene.fog = new THREE.FogExp2(env.skyColor, env.fogDensity);
+
+    if(sun) sun.color.setHex(env.sunColor);
+    if(sunMesh?.material?.color) sunMesh.material.color.setHex(env.sunColor);
+    if(ambientLight) ambientLight.color.setHex(env.ambientColor);
+    if(hemiLight){
+      hemiLight.color.setHex(env.skyColor);
+      hemiLight.groundColor.setHex(0x1d212b);
+    }
+    if(renderer) renderer.toneMappingExposure = env.exposure;
+
+    if(matSide) matSide.color.setHex(env.sideColor);
+    if(matGround) matGround.color.setHex(env.groundColor);
+    if(matTree) matTree.color.setHex(env.treeColor);
+    if(matBuilding) matBuilding.color.setHex(env.buildingColor);
+    if(matLampLight) matLampLight.color.setHex(env.lampColor);
+
+    if(showMessage) inGameMessage(`🌍 Entorno desbloqueado: ${env.name}`, 2200);
   }
 
   function buildInfiniteWorld(){
@@ -1626,6 +1722,7 @@
       if(gameState.zombiesKilledThisWave>=20){
         gameState.wave++;
         gameState.zombiesKilledThisWave=0;
+        applyEnvironmentByWave(gameState.wave);
         inGameMessage(`🌊 ¡Oleada ${gameState.wave}!`, 2000);
         playPowerupSfx();
       }
@@ -1719,6 +1816,7 @@
     elements.btnRestart.style.display='inline-block';
     scoreEl.textContent='0'; hpEl.textContent=gameState.maxHp; speedEl.textContent='0 km/h';
     if(elements.powerupContainer) elements.powerupContainer.innerHTML='';
+    applyEnvironmentByWave(gameState.wave, false);
   }
 
   function startGame(){
