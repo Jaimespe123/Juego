@@ -1041,18 +1041,49 @@
     const types = Object.values(POWERUP_TYPES);
     const type = types[Math.floor(Math.random()*types.length)];
     const powerup = new THREE.Group();
-    const mat = new THREE.MeshStandardMaterial({ color:type.color, emissive:type.color, emissiveIntensity:0.5, roughness:0.2, metalness:0.8 });
-    const cube = new THREE.Mesh(new THREE.BoxGeometry(0.8,0.8,0.8), mat);
-    cube.position.y=1; cube.castShadow=true;
-    powerup.add(cube);
-    // Marco brillante
-    const edges = new THREE.EdgesGeometry(new THREE.BoxGeometry(0.82,0.82,0.82));
-    const wireframe = new THREE.LineSegments(edges, new THREE.LineBasicMaterial({ color:0xffffff }));
-    wireframe.position.y=1;
-    powerup.add(wireframe);
+
+    const baseMat = new THREE.MeshStandardMaterial({
+      color:type.color,
+      emissive:type.color,
+      emissiveIntensity:0.55,
+      roughness:0.25,
+      metalness:0.75
+    });
+
+    const core = new THREE.Mesh(new THREE.IcosahedronGeometry(0.55, 0), baseMat);
+    core.position.y = 1;
+    core.castShadow = true;
+    powerup.add(core);
+
+    const ring = new THREE.Mesh(
+      new THREE.TorusGeometry(0.78, 0.06, 10, 24),
+      new THREE.MeshBasicMaterial({ color:type.color, transparent:true, opacity:0.7 })
+    );
+    ring.position.y = 1;
+    ring.rotation.x = Math.PI / 2;
+    powerup.add(ring);
+
+    // Formas distintivas para TURBO y ARMA
+    if(type.effect === 'turbo'){
+      const bolt = new THREE.Mesh(
+        new THREE.ConeGeometry(0.24, 0.8, 4),
+        new THREE.MeshStandardMaterial({ color:0xffdd55, emissive:0xffaa00, emissiveIntensity:0.85 })
+      );
+      bolt.position.set(0, 1.42, 0);
+      bolt.rotation.z = Math.PI * 0.12;
+      powerup.add(bolt);
+    } else if(type.effect === 'weapon'){
+      const barrel = new THREE.Mesh(
+        new THREE.CylinderGeometry(0.08, 0.08, 0.95, 10),
+        new THREE.MeshStandardMaterial({ color:0xffffff, emissive:0xff4444, emissiveIntensity:0.55 })
+      );
+      barrel.position.set(0, 1.2, 0);
+      barrel.rotation.z = Math.PI / 2;
+      powerup.add(barrel);
+    }
 
     powerup.position.set((Math.random()-0.5)*(CONFIG.ROAD_WIDTH-4), 0, car.position.z-35-Math.random()*20);
-    powerup.userData = { type };
+    powerup.userData = { type, pulseOffset: Math.random() * 1000 };
     scene.add(powerup);
     powerups.push(powerup);
   }
@@ -1392,6 +1423,8 @@
   const keys={};
   let mouseX=0, mouseY=0, mouseActive=false;
   let lastDriftSound=0;
+  let lastShotTime=0;
+  const WEAPON_COOLDOWN_MS = 140;
 
   window.addEventListener('keydown', e=>{
     keys[e.key.toLowerCase()]=true;
@@ -1429,15 +1462,39 @@
   window.addEventListener('touchend', ()=>{ keys['w']=false; mouseActive=false; });
 
   function shootBullet(){
-    if(!car) return;
+    if(!car || !gameState.hasWeapon) return;
+
+    const now = performance.now();
+    if(now - lastShotTime < WEAPON_COOLDOWN_MS) return;
+    lastShotTime = now;
+
     playShootSfx();
+
     const bullet = new THREE.Group();
-    const mat = new THREE.MeshStandardMaterial({ color:0xffff00, emissive:0xffff00, emissiveIntensity:1 });
-    bullet.add(new THREE.Mesh(new THREE.SphereGeometry(0.15,8,8), mat));
-    bullet.position.copy(car.position); bullet.position.y=1;
-    const dir = new THREE.Vector3(0,0,-1).applyQuaternion(car.quaternion);
-    bullet.userData = { velocity:dir.multiplyScalar(1.6), life:2.0 };
-    scene.add(bullet); bullets.push(bullet);
+    const coreMat = new THREE.MeshStandardMaterial({ color:0xfff08a, emissive:0xffdd55, emissiveIntensity:1.2 });
+    const core = new THREE.Mesh(new THREE.SphereGeometry(0.14, 10, 10), coreMat);
+    bullet.add(core);
+
+    const glowMat = new THREE.MeshBasicMaterial({ color:0xff6600, transparent:true, opacity:0.65 });
+    const glow = new THREE.Mesh(new THREE.SphereGeometry(0.23, 8, 8), glowMat);
+    bullet.add(glow);
+
+    const dir = new THREE.Vector3(0,0,-1).applyQuaternion(car.quaternion).normalize();
+    const muzzleOffset = dir.clone().multiplyScalar(2.1);
+    bullet.position.copy(car.position).add(muzzleOffset);
+    bullet.position.y = 1.05;
+
+    bullet.userData = {
+      velocity: dir.multiplyScalar(2.45),
+      life: 1.6,
+      trailTimer: 0
+    };
+
+    scene.add(bullet);
+    bullets.push(bullet);
+
+    // Fogonazo al disparar
+    spawnDust(bullet.position.clone(), 3);
   }
 
   // ========== FÍSICA DEL COCHE (mejorada con drifting real) ==========
@@ -1479,6 +1536,8 @@
     } else {
       carState.nitro = Math.min(carState.maxNitro, carState.nitro + dt*8);
     }
+
+    document.body.classList.toggle('nitro-active', nitro || gameState.hasTurbo);
 
     // Vector de dirección del coche
     const carDir = new THREE.Vector3(0,0,-1).applyQuaternion(car.quaternion);
@@ -1743,8 +1802,12 @@
       }
 
       p.rotation.y+=dt*4;
-      p.children[0].position.y=1+Math.sin(performance.now()/250)*0.35;
-      if(p.children[1]) p.children[1].position.y=p.children[0].position.y;
+      const bob = 1 + Math.sin((performance.now() + (p.userData.pulseOffset || 0))/250)*0.35;
+      p.children[0].position.y = bob;
+      if(p.children[1]){
+        p.children[1].position.y = bob;
+        p.children[1].rotation.z += dt * 3.2;
+      }
 
       if(dist<1.6){ activatePowerup(p.userData.type); scene.remove(p); powerups.splice(i,1); continue; }
       if(p.position.z>car.position.z+18){ scene.remove(p); powerups.splice(i,1); }
@@ -1762,6 +1825,7 @@
         gameState.powerups.set('shield', Date.now()+type.duration);
         inGameMessage('¡Escudo activado! 🛡️', 1500); updatePowerupIcons(); break;
       case 'turbo':
+        gameState.hasTurbo=true;
         gameState.powerups.set('turbo', Date.now()+type.duration);
         inGameMessage('¡Turbo activado! ⚡', 1500); updatePowerupIcons(); break;
       case 'magnet':
@@ -1852,27 +1916,44 @@
 
   function updatePowerups(dt){
     const now=Date.now();
+    let changed=false;
+
     for(const [key,expiry] of gameState.powerups.entries()){
       if(now>expiry){
         gameState.powerups.delete(key);
+        changed=true;
         switch(key){
           case 'shield': gameState.hasShield=false; inGameMessage('Escudo desactivado',1000); break;
+          case 'turbo': gameState.hasTurbo=false; document.body.classList.remove('nitro-active'); inGameMessage('Turbo finalizado',1000); break;
           case 'magnet': gameState.hasMagnet=false; inGameMessage('Imán desactivado',1000); break;
           case 'weapon': gameState.hasWeapon=false; inGameMessage('Arma desactivada',1000); break;
         }
-        updatePowerupIcons();
       }
     }
+
+    if(changed || gameState.powerups.size>0) updatePowerupIcons();
   }
 
   function updatePowerupIcons(){
     if(!elements.powerupContainer) return;
     elements.powerupContainer.innerHTML='';
+
+    const emojis={shield:'🛡️',turbo:'⚡',magnet:'🧲',weapon:'🔫'};
+    const labels={shield:'Escudo',turbo:'Nitro',magnet:'Imán',weapon:'Pistola'};
+    const colors={shield:'#00ffff',turbo:'#ff8800',magnet:'#ffdd00',weapon:'#ff4040'};
+
     for(const [key,expiry] of gameState.powerups.entries()){
-      const rem=Math.ceil((expiry-Date.now())/1000);
-      const icon=document.createElement('div'); icon.className='powerup-icon';
-      const emojis={shield:'🛡️',turbo:'⚡',magnet:'🧲',weapon:'🔫'};
-      icon.innerHTML=`${emojis[key]||''}<br><span style="font-size:10px">${rem}s</span>`;
+      const remMs = Math.max(0, expiry - Date.now());
+      const rem = Math.ceil(remMs / 1000);
+      const icon=document.createElement('div');
+      icon.className='powerup-icon';
+      icon.style.setProperty('--power-color', colors[key] || '#1db954');
+
+      icon.innerHTML = `
+        <div class="powerup-emoji">${emojis[key]||''}</div>
+        <div class="powerup-name">${labels[key] || key}</div>
+        <div class="powerup-time">${rem}s</div>
+      `;
       elements.powerupContainer.appendChild(icon);
     }
   }
@@ -1883,14 +1964,36 @@
       const b=bullets[i];
       b.position.add(b.userData.velocity.clone().multiplyScalar(dt*60));
       b.userData.life-=dt;
+      b.userData.trailTimer += dt;
+
+      if(b.userData.trailTimer > 0.025){
+        b.userData.trailTimer = 0;
+        const trail = new THREE.Mesh(
+          new THREE.SphereGeometry(0.08, 6, 6),
+          new THREE.MeshBasicMaterial({ color:0xff9933, transparent:true, opacity:0.75 })
+        );
+        trail.position.copy(b.position);
+        trail.userData = { velocity: new THREE.Vector3(), life: 0.2, gravity: 0 };
+        scene.add(trail);
+        particles.push(trail);
+      }
+
       if(b.userData.life<=0){ scene.remove(b); bullets.splice(i,1); continue; }
 
       for(let j=zombies.length-1; j>=0; j--){
-        if(b.position.distanceTo(zombies[j].position)<1.6){
+        if(b.position.distanceTo(zombies[j].position)<1.7){
           zombies[j].userData.health--;
-          if(zombies[j].userData.health<=0){ spawnExplosion(zombies[j].position.clone()); killZombie(zombies[j],j); }
-          else playCollisionSfx();
-          scene.remove(b); bullets.splice(i,1); break;
+          if(zombies[j].userData.health<=0){
+            spawnExplosion(zombies[j].position.clone());
+            killZombie(zombies[j],j);
+          } else {
+            playCollisionSfx();
+          }
+
+          spawnDust(b.position.clone(), 4);
+          scene.remove(b);
+          bullets.splice(i,1);
+          break;
         }
       }
     }
@@ -2117,8 +2220,10 @@
     gameState.lastSpawn=performance.now();
     gameState.powerups.clear();
     gameState.hasShield=false; gameState.hasTurbo=false; gameState.hasMagnet=false; gameState.hasWeapon=false;
+    document.body.classList.remove('nitro-active');
 
     carState.nitro=carState.maxNitro;
+    lastShotTime=0;
     if(!carState.velocity) carState.velocity=new THREE.Vector3();
     carState.velocity.set(0,0,0);
     carState.wheelAngle=0; carState.targetWheelAngle=0;
