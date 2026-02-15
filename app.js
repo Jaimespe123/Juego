@@ -77,6 +77,7 @@
     lastSpawn:0, lastTime:0,
     combo:0, comboTimer:0, maxCombo:0,
     kills:0, wave:1, zombiesKilledThisWave:0,
+    mission:null,
     powerups: new Map(),
     hasShield:false, hasTurbo:false, hasMagnet:false, hasWeapon:false,
   };
@@ -157,6 +158,7 @@
     coinsEl:            document.getElementById('coins'),
     comboEl:            document.getElementById('combo'),
     waveEl:             document.getElementById('wave'),
+    missionEl:          document.getElementById('mission'),
     nitroBar:           document.getElementById('nitroBar'),
     volMaster:          document.getElementById('volMaster'),
     volEngine:          document.getElementById('volEngine'),
@@ -355,9 +357,19 @@
   }
 
   function playCollisionSfx(){ playSound(80+Math.random()*60, 0.15, 'sawtooth', 0.35); }
-  function playPowerupSfx(){ playSound(600,0.3,'sine',0.4); setTimeout(()=>playSound(800,0.2,'sine',0.3),100); }
-  function playExplosionSfx(){ playSound(50,0.4,'sawtooth',0.5); }
-  function playShootSfx(){ playSound(200,0.05,'square',0.25); }
+  function playPowerupSfx(){
+    playSound(520,0.18,'triangle',0.26);
+    setTimeout(()=>playSound(780,0.16,'triangle',0.24),70);
+    setTimeout(()=>playSound(1040,0.22,'sine',0.2),140);
+  }
+  function playExplosionSfx(){
+    playSound(80,0.24,'sawtooth',0.34);
+    setTimeout(()=>playSound(46,0.36,'square',0.3),70);
+  }
+  function playShootSfx(){
+    playSound(220,0.03,'square',0.22);
+    setTimeout(()=>playSound(140,0.05,'triangle',0.18),18);
+  }
   function playDriftSfx(){
     // Chirp de neumático en drift
     if(!audioCtx||!audioNodes.sfx) return;
@@ -536,6 +548,9 @@
   // ✨ Referencias de iluminación para atmósferas dinámicas
   let ambientLight = null;
   let hemiLight = null;
+  let lampLights = [];
+  let moonMesh = null;
+  let starField = null;
 
   // ========== INIT THREE ==========
   function initThree(){
@@ -593,6 +608,7 @@
 
       // CONSTRUIR MUNDO
       buildInfiniteWorld();
+      createSkyDecorations();
       createCar();
       initDustSystem();
       initMinimap(); // ✅ Inicializar mini-mapa
@@ -611,7 +627,7 @@
 
   // ========== MUNDO INFINITO ==========
   // Materiales compartidos (se crean una vez)
-  let matRoad, matSide, matLine, matGround, matTree, matTrunk, matLampPost, matLampLight, matBuilding;
+  let matRoad, matSide, matLine, matGround, matTree, matTrunk, matLampPost, matLampLight, matBuilding, matRock, matBillboard;
 
   function initWorldMaterials(){
     // Carretera asfalto oscuro
@@ -630,6 +646,9 @@
     matLampLight = new THREE.MeshBasicMaterial({ color:0xffeeaa });
     // Edificios
     matBuilding  = new THREE.MeshStandardMaterial({ color:0x3a3a4a, roughness:0.8 });
+    // Rocas / carteles
+    matRock = new THREE.MeshStandardMaterial({ color:0x4a4d52, roughness:0.95, metalness:0.05 });
+    matBillboard = new THREE.MeshStandardMaterial({ color:0x1f2730, roughness:0.75, metalness:0.2 });
   }
 
   function buildInfiniteWorld(){
@@ -753,6 +772,25 @@
       }
     });
 
+    // --- Carteles luminosos de carretera ---
+    sides.forEach(side=>{
+      for(let z=-L/2+20; z<L/2; z+=85){
+        const billboard = createBillboard();
+        billboard.position.set(side*(halfW+11), 0, z + (Math.random()-0.5)*8);
+        billboard.rotation.y = side < 0 ? Math.PI * 0.18 : -Math.PI * 0.18;
+        g.add(billboard);
+      }
+    });
+
+    // --- Rocas para enriquecer el fondo ---
+    for(let i=0; i<18; i++){
+      const rock = createRock();
+      const side = Math.random()<0.5 ? -1 : 1;
+      const offset = halfW + 7 + Math.random()*20;
+      rock.position.set(side*offset, 0, -L/2 + Math.random()*L);
+      g.add(rock);
+    }
+
     return g;
   }
 
@@ -796,8 +834,11 @@
     bulb.position.set(1.1, 4.9, 0);
     g.add(bulb);
     // Luz puntual pequeña
-    const light = new THREE.PointLight(0xffeeaa, 0.4, 18);
+    const light = new THREE.PointLight(0xffeeaa, 0.55, 24);
     light.position.set(1.1, 4.9, 0);
+    light.userData.baseIntensity = 0.55;
+    light.userData.baseDistance = 24;
+    lampLights.push(light);
     g.add(light);
     return g;
   }
@@ -838,8 +879,76 @@
     return g;
   }
 
+  function createRock(){
+    const rock = new THREE.Mesh(
+      new THREE.DodecahedronGeometry(0.8 + Math.random()*1.1, 0),
+      matRock.clone()
+    );
+    rock.material.color.offsetHSL(0, 0, (Math.random()-0.5)*0.08);
+    rock.position.y = 0.4;
+    rock.scale.set(1 + Math.random()*1.5, 0.7 + Math.random()*0.9, 1 + Math.random()*1.3);
+    rock.castShadow = true;
+    rock.receiveShadow = true;
+    return rock;
+  }
+
+  function createBillboard(){
+    const g = new THREE.Group();
+    const pole = new THREE.Mesh(new THREE.CylinderGeometry(0.12, 0.15, 4.8, 6), matLampPost);
+    pole.position.y = 2.4;
+    pole.castShadow = true;
+    g.add(pole);
+
+    const panel = new THREE.Mesh(new THREE.BoxGeometry(5.2, 2.1, 0.2), matBillboard.clone());
+    panel.position.y = 4.4;
+    panel.material.color.setHSL(0.58 + Math.random()*0.08, 0.25, 0.22 + Math.random()*0.12);
+    panel.castShadow = true;
+    g.add(panel);
+
+    const glow = new THREE.Mesh(
+      new THREE.PlaneGeometry(4.6, 1.5),
+      new THREE.MeshBasicMaterial({ color:0x66ccff, transparent:true, opacity:0.45, side:THREE.DoubleSide })
+    );
+    glow.position.set(0, 4.4, 0.12);
+    g.add(glow);
+
+    const textBars = new THREE.Mesh(
+      new THREE.PlaneGeometry(3.8, 0.25),
+      new THREE.MeshBasicMaterial({ color:0xe6f7ff, transparent:true, opacity:0.8 })
+    );
+    textBars.position.set(0, 4.4, 0.13);
+    g.add(textBars);
+
+    return g;
+  }
+
   // --- Montaña (horizonte) ---
   // ❌ FUNCIÓN createMountain ELIMINADA - Ya no hay pirámides/montañas
+
+  function createSkyDecorations(){
+    // Luna
+    const moonGeom = new THREE.SphereGeometry(5, 20, 20);
+    const moonMat = new THREE.MeshBasicMaterial({ color:0xdde4ff, transparent:true, opacity:0.85, fog:false });
+    moonMesh = new THREE.Mesh(moonGeom, moonMat);
+    moonMesh.position.set(-85, 55, -140);
+    moonMesh.visible = false;
+    scene.add(moonMesh);
+
+    // Campo de estrellas
+    const starCount = 420;
+    const starPositions = new Float32Array(starCount * 3);
+    for(let i=0; i<starCount; i++){
+      const i3 = i*3;
+      starPositions[i3] = (Math.random() - 0.5) * 360;
+      starPositions[i3+1] = 25 + Math.random() * 120;
+      starPositions[i3+2] = -220 + Math.random() * 300;
+    }
+    const starGeom = new THREE.BufferGeometry();
+    starGeom.setAttribute('position', new THREE.BufferAttribute(starPositions, 3));
+    const starMat = new THREE.PointsMaterial({ color:0xe9ecff, size:0.95, transparent:true, opacity:0.0, fog:false });
+    starField = new THREE.Points(starGeom, starMat);
+    scene.add(starField);
+  }
 
   // ========== COCHE (mejorado con suspensión visual) ==========
   function createCar(){
@@ -1041,18 +1150,49 @@
     const types = Object.values(POWERUP_TYPES);
     const type = types[Math.floor(Math.random()*types.length)];
     const powerup = new THREE.Group();
-    const mat = new THREE.MeshStandardMaterial({ color:type.color, emissive:type.color, emissiveIntensity:0.5, roughness:0.2, metalness:0.8 });
-    const cube = new THREE.Mesh(new THREE.BoxGeometry(0.8,0.8,0.8), mat);
-    cube.position.y=1; cube.castShadow=true;
-    powerup.add(cube);
-    // Marco brillante
-    const edges = new THREE.EdgesGeometry(new THREE.BoxGeometry(0.82,0.82,0.82));
-    const wireframe = new THREE.LineSegments(edges, new THREE.LineBasicMaterial({ color:0xffffff }));
-    wireframe.position.y=1;
-    powerup.add(wireframe);
+
+    const baseMat = new THREE.MeshStandardMaterial({
+      color:type.color,
+      emissive:type.color,
+      emissiveIntensity:0.55,
+      roughness:0.25,
+      metalness:0.75
+    });
+
+    const core = new THREE.Mesh(new THREE.IcosahedronGeometry(0.55, 0), baseMat);
+    core.position.y = 1;
+    core.castShadow = true;
+    powerup.add(core);
+
+    const ring = new THREE.Mesh(
+      new THREE.TorusGeometry(0.78, 0.06, 10, 24),
+      new THREE.MeshBasicMaterial({ color:type.color, transparent:true, opacity:0.7 })
+    );
+    ring.position.y = 1;
+    ring.rotation.x = Math.PI / 2;
+    powerup.add(ring);
+
+    // Formas distintivas para TURBO y ARMA
+    if(type.effect === 'turbo'){
+      const bolt = new THREE.Mesh(
+        new THREE.ConeGeometry(0.24, 0.8, 4),
+        new THREE.MeshStandardMaterial({ color:0xffdd55, emissive:0xffaa00, emissiveIntensity:0.85 })
+      );
+      bolt.position.set(0, 1.42, 0);
+      bolt.rotation.z = Math.PI * 0.12;
+      powerup.add(bolt);
+    } else if(type.effect === 'weapon'){
+      const barrel = new THREE.Mesh(
+        new THREE.CylinderGeometry(0.08, 0.08, 0.95, 10),
+        new THREE.MeshStandardMaterial({ color:0xffffff, emissive:0xff4444, emissiveIntensity:0.55 })
+      );
+      barrel.position.set(0, 1.2, 0);
+      barrel.rotation.z = Math.PI / 2;
+      powerup.add(barrel);
+    }
 
     powerup.position.set((Math.random()-0.5)*(CONFIG.ROAD_WIDTH-4), 0, car.position.z-35-Math.random()*20);
-    powerup.userData = { type };
+    powerup.userData = { type, pulseOffset: Math.random() * 1000 };
     scene.add(powerup);
     powerups.push(powerup);
   }
@@ -1106,6 +1246,29 @@
     coins.push(coin);
   }
 
+  function updateLampAtmosphere(){
+    const isNight = currentAtmosphere === 'night' || currentAtmosphere === 'storm' || currentAtmosphere === 'galaxy';
+    const isFog = currentAtmosphere === 'fog';
+
+    lampLights = lampLights.filter(l => l && l.parent);
+    lampLights.forEach(light => {
+      const boost = isNight ? 2.8 : (isFog ? 1.5 : 0.6);
+      light.intensity = (light.userData.baseIntensity || 0.55) * boost;
+      light.distance = (light.userData.baseDistance || 24) * (isNight ? 1.6 : 1.0);
+      light.color.setHex(isNight ? 0xfff2c2 : 0xffeeaa);
+    });
+  }
+
+  function updateSkyForAtmosphere(){
+    if(moonMesh){
+      moonMesh.visible = currentAtmosphere === 'night' || currentAtmosphere === 'galaxy';
+    }
+    if(starField){
+      const twinkle = currentAtmosphere === 'night' ? 0.92 : (currentAtmosphere === 'galaxy' ? 0.98 : 0.05);
+      starField.material.opacity = twinkle;
+    }
+  }
+
   // ✨ ========== CAMBIO DE ATMÓSFERA ==========
   function changeAtmosphere(atmosphereKey){
     if(!ATMOSPHERES[atmosphereKey]) return;
@@ -1134,6 +1297,9 @@
     if(hemiLight){
       hemiLight.color.setHex(atm.sky);
     }
+
+    updateLampAtmosphere();
+    updateSkyForAtmosphere();
     
     // Mensaje visual
     inGameMessage(`🌍 ${atm.name}`, 2500);
@@ -1388,10 +1554,73 @@
   }
 
   
+  function assignMission(){
+    const missionType = Math.random() < 0.55 ? 'kill' : 'coin';
+    if(missionType === 'kill'){
+      gameState.mission = {
+        type:'kill',
+        target: 10 + Math.floor(gameState.wave * 1.5),
+        progress:0,
+        rewardCoins: 10 + gameState.wave * 3,
+        rewardNitro: 25,
+        completed:false
+      };
+    } else {
+      gameState.mission = {
+        type:'coin',
+        target: 8 + Math.floor(gameState.wave * 1.2),
+        progress:0,
+        rewardCoins: 14 + gameState.wave * 3,
+        rewardNitro: 30,
+        completed:false
+      };
+    }
+    updateMissionHud();
+    inGameMessage(`🎯 Nueva misión: ${getMissionText()}`, 1800);
+  }
+
+  function getMissionText(){
+    if(!gameState.mission) return '-';
+    const m = gameState.mission;
+    const label = m.type === 'kill' ? 'Elimina' : 'Recoge';
+    const unit = m.type === 'kill' ? 'zombies' : 'monedas';
+    const status = `${label} ${m.progress}/${m.target} ${unit}`;
+    if(m.completed) return `✅ ${status}`;
+    return status;
+  }
+
+  function updateMissionHud(){
+    if(elements.missionEl) elements.missionEl.textContent = getMissionText();
+  }
+
+  function playMissionSfx(){
+    playSound(740,0.16,'triangle',0.24);
+    setTimeout(()=>playSound(980,0.16,'triangle',0.22),90);
+    setTimeout(()=>playSound(1240,0.2,'sine',0.2),200);
+  }
+
+  function updateMissionProgress(type, amount=1){
+    const m = gameState.mission;
+    if(!m || m.completed || m.type!==type) return;
+
+    m.progress = Math.min(m.target, m.progress + amount);
+    if(m.progress >= m.target){
+      m.completed = true;
+      playerData.totalCoins += m.rewardCoins;
+      carState.nitro = Math.min(carState.maxNitro, carState.nitro + m.rewardNitro);
+      playMissionSfx();
+      inGameMessage(`🏁 Misión completada: +${m.rewardCoins} monedas`, 2200);
+    }
+
+    updateMissionHud();
+  }
+
   // ========== CONTROLES ==========
   const keys={};
   let mouseX=0, mouseY=0, mouseActive=false;
   let lastDriftSound=0;
+  let lastShotTime=0;
+  const WEAPON_COOLDOWN_MS = 140;
 
   window.addEventListener('keydown', e=>{
     keys[e.key.toLowerCase()]=true;
@@ -1429,15 +1658,39 @@
   window.addEventListener('touchend', ()=>{ keys['w']=false; mouseActive=false; });
 
   function shootBullet(){
-    if(!car) return;
+    if(!car || !gameState.hasWeapon) return;
+
+    const now = performance.now();
+    if(now - lastShotTime < WEAPON_COOLDOWN_MS) return;
+    lastShotTime = now;
+
     playShootSfx();
+
     const bullet = new THREE.Group();
-    const mat = new THREE.MeshStandardMaterial({ color:0xffff00, emissive:0xffff00, emissiveIntensity:1 });
-    bullet.add(new THREE.Mesh(new THREE.SphereGeometry(0.15,8,8), mat));
-    bullet.position.copy(car.position); bullet.position.y=1;
-    const dir = new THREE.Vector3(0,0,-1).applyQuaternion(car.quaternion);
-    bullet.userData = { velocity:dir.multiplyScalar(1.6), life:2.0 };
-    scene.add(bullet); bullets.push(bullet);
+    const coreMat = new THREE.MeshStandardMaterial({ color:0xfff08a, emissive:0xffdd55, emissiveIntensity:1.2 });
+    const core = new THREE.Mesh(new THREE.SphereGeometry(0.14, 10, 10), coreMat);
+    bullet.add(core);
+
+    const glowMat = new THREE.MeshBasicMaterial({ color:0xff6600, transparent:true, opacity:0.65 });
+    const glow = new THREE.Mesh(new THREE.SphereGeometry(0.23, 8, 8), glowMat);
+    bullet.add(glow);
+
+    const dir = new THREE.Vector3(0,0,-1).applyQuaternion(car.quaternion).normalize();
+    const muzzleOffset = dir.clone().multiplyScalar(2.1);
+    bullet.position.copy(car.position).add(muzzleOffset);
+    bullet.position.y = 1.05;
+
+    bullet.userData = {
+      velocity: dir.multiplyScalar(2.45),
+      life: 1.6,
+      trailTimer: 0
+    };
+
+    scene.add(bullet);
+    bullets.push(bullet);
+
+    // Fogonazo al disparar
+    spawnDust(bullet.position.clone(), 3);
   }
 
   // ========== FÍSICA DEL COCHE (mejorada con drifting real) ==========
@@ -1479,6 +1732,8 @@
     } else {
       carState.nitro = Math.min(carState.maxNitro, carState.nitro + dt*8);
     }
+
+    document.body.classList.toggle('nitro-active', nitro || gameState.hasTurbo);
 
     // Vector de dirección del coche
     const carDir = new THREE.Vector3(0,0,-1).applyQuaternion(car.quaternion);
@@ -1708,6 +1963,7 @@
     addCoins(zombie.userData.type.coins);
     gameState.kills++;
     gameState.zombiesKilledThisWave++;
+    updateMissionProgress('kill', 1);
 
     // Partículas de muerte
     spawnDust(zombie.position.clone(), 10);
@@ -1743,8 +1999,12 @@
       }
 
       p.rotation.y+=dt*4;
-      p.children[0].position.y=1+Math.sin(performance.now()/250)*0.35;
-      if(p.children[1]) p.children[1].position.y=p.children[0].position.y;
+      const bob = 1 + Math.sin((performance.now() + (p.userData.pulseOffset || 0))/250)*0.35;
+      p.children[0].position.y = bob;
+      if(p.children[1]){
+        p.children[1].position.y = bob;
+        p.children[1].rotation.z += dt * 3.2;
+      }
 
       if(dist<1.6){ activatePowerup(p.userData.type); scene.remove(p); powerups.splice(i,1); continue; }
       if(p.position.z>car.position.z+18){ scene.remove(p); powerups.splice(i,1); }
@@ -1762,6 +2022,7 @@
         gameState.powerups.set('shield', Date.now()+type.duration);
         inGameMessage('¡Escudo activado! 🛡️', 1500); updatePowerupIcons(); break;
       case 'turbo':
+        gameState.hasTurbo=true;
         gameState.powerups.set('turbo', Date.now()+type.duration);
         inGameMessage('¡Turbo activado! ⚡', 1500); updatePowerupIcons(); break;
       case 'magnet':
@@ -1823,6 +2084,7 @@
     
     playerData.totalCoins += coinsEarned;
     gameState.score += 5; // Bonus de puntuación por recoger monedas
+    updateMissionProgress('coin', coinsEarned);
     
     // Sonido de moneda
     playSound(800, 0.1, 'sine', 0.3);
@@ -1852,27 +2114,44 @@
 
   function updatePowerups(dt){
     const now=Date.now();
+    let changed=false;
+
     for(const [key,expiry] of gameState.powerups.entries()){
       if(now>expiry){
         gameState.powerups.delete(key);
+        changed=true;
         switch(key){
           case 'shield': gameState.hasShield=false; inGameMessage('Escudo desactivado',1000); break;
+          case 'turbo': gameState.hasTurbo=false; document.body.classList.remove('nitro-active'); inGameMessage('Turbo finalizado',1000); break;
           case 'magnet': gameState.hasMagnet=false; inGameMessage('Imán desactivado',1000); break;
           case 'weapon': gameState.hasWeapon=false; inGameMessage('Arma desactivada',1000); break;
         }
-        updatePowerupIcons();
       }
     }
+
+    if(changed || gameState.powerups.size>0) updatePowerupIcons();
   }
 
   function updatePowerupIcons(){
     if(!elements.powerupContainer) return;
     elements.powerupContainer.innerHTML='';
+
+    const emojis={shield:'🛡️',turbo:'⚡',magnet:'🧲',weapon:'🔫'};
+    const labels={shield:'Escudo',turbo:'Nitro',magnet:'Imán',weapon:'Pistola'};
+    const colors={shield:'#00ffff',turbo:'#ff8800',magnet:'#ffdd00',weapon:'#ff4040'};
+
     for(const [key,expiry] of gameState.powerups.entries()){
-      const rem=Math.ceil((expiry-Date.now())/1000);
-      const icon=document.createElement('div'); icon.className='powerup-icon';
-      const emojis={shield:'🛡️',turbo:'⚡',magnet:'🧲',weapon:'🔫'};
-      icon.innerHTML=`${emojis[key]||''}<br><span style="font-size:10px">${rem}s</span>`;
+      const remMs = Math.max(0, expiry - Date.now());
+      const rem = Math.ceil(remMs / 1000);
+      const icon=document.createElement('div');
+      icon.className='powerup-icon';
+      icon.style.setProperty('--power-color', colors[key] || '#1db954');
+
+      icon.innerHTML = `
+        <div class="powerup-emoji">${emojis[key]||''}</div>
+        <div class="powerup-name">${labels[key] || key}</div>
+        <div class="powerup-time">${rem}s</div>
+      `;
       elements.powerupContainer.appendChild(icon);
     }
   }
@@ -1883,14 +2162,36 @@
       const b=bullets[i];
       b.position.add(b.userData.velocity.clone().multiplyScalar(dt*60));
       b.userData.life-=dt;
+      b.userData.trailTimer += dt;
+
+      if(b.userData.trailTimer > 0.025){
+        b.userData.trailTimer = 0;
+        const trail = new THREE.Mesh(
+          new THREE.SphereGeometry(0.08, 6, 6),
+          new THREE.MeshBasicMaterial({ color:0xff9933, transparent:true, opacity:0.75 })
+        );
+        trail.position.copy(b.position);
+        trail.userData = { velocity: new THREE.Vector3(), life: 0.2, gravity: 0 };
+        scene.add(trail);
+        particles.push(trail);
+      }
+
       if(b.userData.life<=0){ scene.remove(b); bullets.splice(i,1); continue; }
 
       for(let j=zombies.length-1; j>=0; j--){
-        if(b.position.distanceTo(zombies[j].position)<1.6){
+        if(b.position.distanceTo(zombies[j].position)<1.7){
           zombies[j].userData.health--;
-          if(zombies[j].userData.health<=0){ spawnExplosion(zombies[j].position.clone()); killZombie(zombies[j],j); }
-          else playCollisionSfx();
-          scene.remove(b); bullets.splice(i,1); break;
+          if(zombies[j].userData.health<=0){
+            spawnExplosion(zombies[j].position.clone());
+            killZombie(zombies[j],j);
+          } else {
+            playCollisionSfx();
+          }
+
+          spawnDust(b.position.clone(), 4);
+          scene.remove(b);
+          bullets.splice(i,1);
+          break;
         }
       }
     }
@@ -2040,6 +2341,7 @@
         const newAtmosphere = getAtmosphereForWave(gameState.wave);
         changeAtmosphere(newAtmosphere);
         
+        assignMission();
         inGameMessage(`🌊 ¡Oleada ${gameState.wave}!`, 2000);
         playPowerupSfx();
       }
@@ -2051,6 +2353,14 @@
     }
 
     // Sol (se mueve suavemente)
+    if(starField && car){
+      starField.position.z = car.position.z - 90;
+      if(starField.material){
+        const base = currentAtmosphere === 'night' ? 0.9 : (currentAtmosphere === 'galaxy' ? 0.96 : 0.04);
+        starField.material.opacity = clamp(base + Math.sin(performance.now()*0.003) * 0.05, 0.02, 1);
+      }
+    }
+
     if(sunMesh && sun){
       const t=performance.now()*0.00012;
       sun.position.set(100*Math.cos(t), 80+10*Math.sin(t*0.7), 60+20*Math.sin(t*0.4));
@@ -2092,6 +2402,7 @@
       else elements.comboEl.style.display='none';
     }
     if(elements.waveEl) elements.waveEl.textContent=`Oleada ${gameState.wave}`;
+    updateMissionHud();
     if(elements.nitroBar) elements.nitroBar.style.width=(carState.nitro/carState.maxNitro*100)+'%';
     coinsEl.textContent = playerData.totalCoins + Math.floor(gameState.score/100);
 
@@ -2117,8 +2428,16 @@
     gameState.lastSpawn=performance.now();
     gameState.powerups.clear();
     gameState.hasShield=false; gameState.hasTurbo=false; gameState.hasMagnet=false; gameState.hasWeapon=false;
+    document.body.classList.remove('nitro-active');
+
+    Object.keys(keys).forEach(k=> keys[k]=false);
+    mouseActive=false;
+    camShake.intensity=0; camShake.decay=0;
+    const comboMsg = document.getElementById('bigComboMessage'); if(comboMsg) comboMsg.remove();
+    lastBigMessageCombo = 0;
 
     carState.nitro=carState.maxNitro;
+    lastShotTime=0;
     if(!carState.velocity) carState.velocity=new THREE.Vector3();
     carState.velocity.set(0,0,0);
     carState.wheelAngle=0; carState.targetWheelAngle=0;
@@ -2137,6 +2456,7 @@
     elements.btnRestart.style.display='inline-block';
     scoreEl.textContent='0'; hpEl.textContent=gameState.maxHp; speedEl.textContent='0 km/h';
     if(elements.powerupContainer) elements.powerupContainer.innerHTML='';
+    assignMission();
   }
 
   function startGame(){
