@@ -46,7 +46,7 @@
       </div>
       <div class="stat">
         <div><span class="label">Misión</span></div>
-        <div id="mission" style="font-size: 11px; color: #ffdd88; max-width: 120px; text-align: right;">-</div>
+        <div id="mission" class="mission-text">-</div>
       </div>
       <div class="stat nitro-stat">
         <div class="nitro-label">Nitro</div>
@@ -353,18 +353,21 @@
     </section>
 
     <!-- TABLA DE CLASIFICACIÓN -->
-    <section id="overlayLeaderboard" class="overlay" style="display:none; max-width: 600px;" role="dialog" aria-labelledby="leaderboardTitle" aria-modal="true">
+    <section id="overlayLeaderboard" class="overlay" style="display:none; max-width: 700px;" role="dialog" aria-labelledby="leaderboardTitle" aria-modal="true">
       <h1 id="leaderboardTitle">🏆 Tabla de Clasificación</h1>
       
-      <p style="color: var(--muted); font-size: 14px; margin-bottom: 20px;">
-        Top 10 mejores puntuaciones
+      <p style="color: var(--muted); font-size: 14px; margin-bottom: 12px;">
+        Top 10 mejores puntuaciones con detalles de partida
       </p>
 
-      <div id="leaderboardContent" style="min-height: 300px;">
+      <div id="leaderboardSummary" class="leaderboard-summary"></div>
+
+      <div id="leaderboardContent" style="min-height: 260px;">
         <!-- Las entradas se generan dinámicamente -->
       </div>
 
-      <div class="shop-actions">
+      <div class="shop-actions" style="display:flex; gap:10px; flex-wrap:wrap; justify-content:center;">
+        <button class="btn warn" id="clearLeaderboard">🧹 Limpiar récords</button>
         <button class="btn large" id="backFromLeaderboard">
           ◀️ Volver al Menú
         </button>

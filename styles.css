@@ -1000,6 +1000,8 @@ kbd {
   .powerup-emoji { font-size: 18px; }
   .powerup-name { font-size: 9px; }
 
+  .leaderboard-summary { grid-template-columns: 1fr; }
+
   #topRight {
     right: var(--spacing-sm);
     top: var(--spacing-sm);
@@ -1118,6 +1120,39 @@ kbd {
   image-rendering: crisp-edges;
 }
 
+
+.mission-text {
+  font-size: 11px;
+  color: #ffdd88;
+  max-width: 120px;
+  text-align: right;
+}
+
+.leaderboard-summary {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.leaderboard-summary .card {
+  background: rgba(255,255,255,0.05);
+  border: 1px solid rgba(255,255,255,0.1);
+  border-radius: 8px;
+  padding: 8px;
+  text-align: center;
+}
+
+.leaderboard-summary .label {
+  color: var(--muted);
+  font-size: 11px;
+}
+
+.leaderboard-summary .value {
+  color: var(--accent);
+  font-size: 16px;
+  font-weight: 800;
+}
 /* ========== LEADERBOARD ========== */
 .leaderboard-entry {
   display: flex;

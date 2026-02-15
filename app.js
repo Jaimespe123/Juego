@@ -99,6 +99,7 @@
   let playerData = {
     totalCoins:0, ownedColors:[0], currentColorIndex:0,
     mouseSensitivity:1, bestScore:0, totalKills:0, gamesPlayed:0,
+    leaderboard: [],
     upgrades: JSON.parse(JSON.stringify(SHOP_UPGRADES)),
   };
 
@@ -110,6 +111,7 @@
         const loaded = JSON.parse(saved);
         playerData = { ...playerData, ...loaded };
         if(!playerData.upgrades) playerData.upgrades = JSON.parse(JSON.stringify(SHOP_UPGRADES));
+        if(!Array.isArray(playerData.leaderboard)) playerData.leaderboard = [];
       }
       if(elements.mouseSensitivity) {
         elements.mouseSensitivity.value = playerData.mouseSensitivity || 1;
@@ -178,6 +180,9 @@
     goKills:            document.getElementById('goKills'),
     goMaxCombo:         document.getElementById('goMaxCombo'),
     powerupContainer:   document.getElementById('powerupContainer'),
+    leaderboardContent:  document.getElementById('leaderboardContent'),
+    leaderboardSummary:  document.getElementById('leaderboardSummary'),
+    clearLeaderboard:    document.getElementById('clearLeaderboard'),
   };
 
   const { overlayMenu, overlayShop, overlayGameOver,
@@ -481,6 +486,64 @@
   }
 
 
+  function renderLeaderboard(){
+    if(!elements.leaderboardContent) return;
+
+    const records = (playerData.leaderboard || [])
+      .slice()
+      .sort((a,b)=> (b.score||0) - (a.score||0))
+      .slice(0,10);
+
+    if(elements.leaderboardSummary){
+      const totalGames = playerData.gamesPlayed || records.length;
+      const avgScore = records.length ? Math.floor(records.reduce((acc,r)=>acc+(r.score||0),0)/records.length) : 0;
+      const bestWave = records.length ? Math.max(...records.map(r=>r.wave||1)) : 1;
+      elements.leaderboardSummary.innerHTML = `
+        <div class="card"><div class="label">Partidas</div><div class="value">${totalGames}</div></div>
+        <div class="card"><div class="label">Score promedio</div><div class="value">${avgScore}</div></div>
+        <div class="card"><div class="label">Mejor oleada</div><div class="value">${bestWave}</div></div>
+      `;
+    }
+
+    if(records.length===0){
+      elements.leaderboardContent.innerHTML = '<div class="leaderboard-empty">Aún no hay partidas guardadas. ¡Juega una ronda!</div>';
+      return;
+    }
+
+    elements.leaderboardContent.innerHTML = records.map((entry, idx)=>{
+      const rankClass = idx===0 ? 'gold' : (idx===1 ? 'silver' : (idx===2 ? 'bronze' : ''));
+      const date = entry.date ? new Date(entry.date).toLocaleDateString('es-ES') : '-';
+      const crown = idx===0 ? ' 👑' : '';
+      return `
+        <article class="leaderboard-entry ${idx===0?'current-player':''}">
+          <div class="rank ${rankClass}">#${idx+1}</div>
+          <div class="player-info">
+            <div class="score">${entry.score||0}${crown}</div>
+            <div class="details">🧟 ${entry.kills||0} kills · 🌊 Oleada ${entry.wave||1} · 🔥 x${entry.maxCombo||1}</div>
+          </div>
+          <div class="date">${date}</div>
+        </article>
+      `;
+    }).join('');
+  }
+
+  function saveRunToLeaderboard(){
+    const record = {
+      score: Math.floor(gameState.score),
+      kills: gameState.kills,
+      wave: gameState.wave,
+      maxCombo: gameState.maxCombo,
+      coins: Math.floor(gameState.score/100),
+      date: Date.now()
+    };
+
+    playerData.leaderboard = Array.isArray(playerData.leaderboard) ? playerData.leaderboard : [];
+    playerData.leaderboard.push(record);
+    playerData.leaderboard.sort((a,b)=> (b.score||0) - (a.score||0));
+    playerData.leaderboard = playerData.leaderboard.slice(0,50);
+  }
+
+
   function updateCarColor(colorIndex){
     if(!car) return;
     const color=SHOP_COLORS[colorIndex];
@@ -506,8 +569,18 @@
   elements.openLeaderboard = document.getElementById('openLeaderboard');
   elements.overlayLeaderboard = document.getElementById('overlayLeaderboard');
   elements.backFromLeaderboard = document.getElementById('backFromLeaderboard');
-  if(elements.openLeaderboard) elements.openLeaderboard.addEventListener('click', ()=>{ overlayMenu.style.display='none'; elements.overlayLeaderboard.style.display='block'; });
+  if(elements.openLeaderboard) elements.openLeaderboard.addEventListener('click', ()=>{
+    overlayMenu.style.display='none';
+    elements.overlayLeaderboard.style.display='block';
+    renderLeaderboard();
+  });
   if(elements.backFromLeaderboard) elements.backFromLeaderboard.addEventListener('click', ()=>{ elements.overlayLeaderboard.style.display='none'; overlayMenu.style.display='block'; updateMenuStats(); showBackgroundCanvas(); hideHUD(); });
+  if(elements.clearLeaderboard) elements.clearLeaderboard.addEventListener('click', ()=>{
+    playerData.leaderboard = [];
+    savePlayerData();
+    renderLeaderboard();
+    inGameMessage('🧹 Récords limpiados', 1200);
+  });
 
   loadPlayerData();
   updateMenuStats();
@@ -1252,7 +1325,7 @@
 
     lampLights = lampLights.filter(l => l && l.parent);
     lampLights.forEach(light => {
-      const boost = isNight ? 2.8 : (isFog ? 1.5 : 0.6);
+      const boost = isNight ? 3.4 : (isFog ? 1.8 : 0.7);
       light.intensity = (light.userData.baseIntensity || 0.55) * boost;
       light.distance = (light.userData.baseDistance || 24) * (isNight ? 1.6 : 1.0);
       light.color.setHex(isNight ? 0xfff2c2 : 0xffeeaa);
@@ -2461,6 +2534,7 @@
 
   function startGame(){
     if(!scene||!car){ alert('Error: Escena no inicializada. Recarga la página.'); return; }
+    if(gameState.running) return;
     showHUD();
     resetGame();
     gameState.running=true; gameState.paused=false;
@@ -2479,6 +2553,7 @@
     playerData.totalKills+=gameState.kills;
     elements.goTitle.textContent = gameState.score>playerData.bestScore ? '🏆 ¡Nuevo Récord!' : 'Game Over';
     if(gameState.score>playerData.bestScore) playerData.bestScore=gameState.score;
+    saveRunToLeaderboard();
     savePlayerData();
     elements.goScore.textContent=Math.floor(gameState.score);
     elements.goCoins.textContent=coinsGained;
