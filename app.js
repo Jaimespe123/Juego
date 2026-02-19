@@ -1980,8 +1980,8 @@
     let steerInput = 0;
     if(left)  steerInput += 1;
     if(right) steerInput -= 1;
+    // Mouse: una sola vez (sin duplicar)
     if(mouseActive && Math.abs(mouseX)>0.05) steerInput += mouseX * steerProfile.mouseFactor;
-    if(mouseActive && Math.abs(mouseX)>0.05) steerInput += mouseX * 0.82;
     steerInput = clamp(steerInput, -1, 1);
 
     // Ángulo máximo de las ruedas (se reduce a alta velocidad para estabilidad)
@@ -2052,10 +2052,23 @@
 
     // --- Giro (yaw) basado en ángulo de ruedas y velocidad ---
     const turnRate = (carState.wheelAngle / steerProfile.steerBase) * CONFIG.TURN_SPEED;
-    if(speed > 0.015){
-      // El giro es proporcional a la velocidad frontal
+    if(speed > 0.01){
       const turnSign = velDot >= 0 ? 1 : -1;
-      car.rotation.y += turnRate * turnSign * (speed / maxSpeed) * dt * 60;
+      // El giro sube rapido desde baja velocidad y se modera a alta
+      // (antes era speed/maxSpeed, lo que hacia que a baja vel casi no girara)
+      const turnFactor = clamp(speed / (maxSpeed * 0.25), 0, 1) * (1 - speedNorm * 0.3);
+      car.rotation.y += turnRate * turnSign * turnFactor * dt * 60 * 2.2;
+
+      // Redirigir velocidad hacia la nueva direccion del coche (grip)
+      // Sin esto el coche rota visualmente pero sigue moviendose en linea recta
+      const newCarDir = new THREE.Vector3(0,0,-1).applyQuaternion(car.quaternion);
+      const projSpeed  = carState.velocity.dot(newCarDir);
+      if(Math.abs(projSpeed) > 0.005){
+        const targetVel = newCarDir.clone().multiplyScalar(projSpeed);
+        // Con handbrake se redirige menos (drift), sin el mucho mas (grip)
+        const gripStrength = handbrake ? 0.04 : lerp(0.18, 0.10, speedNorm);
+        carState.velocity.lerp(targetVel, gripStrength);
+      }
     }
 
     // --- Desplazamiento ---
