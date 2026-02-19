@@ -205,6 +205,34 @@
         <!-- Las mejoras se generan dinámicamente aquí -->
       </div>
 
+
+      <h2 style="margin-top: 24px; font-size: 18px; color: var(--accent);">🧩 Estilo del Coche</h2>
+      <p style="font-size: 13px; color: var(--muted); margin-bottom: 10px;">Skins temáticas, llantas, neones y alerones con rareza.</p>
+      <div id="cosmeticsGrid" style="display:grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 10px;"></div>
+
+      <h2 style="margin-top: 20px; font-size: 18px; color: var(--accent);">🔥 Ofertas rotativas</h2>
+      <div id="featuredOffers" style="display:grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 10px;"></div>
+
+      <div class="daily-mission-card" style="margin-top: 14px;">
+        <h3>🎁 Caja cosmética (monedas)</h3>
+        <p>Consigue un cosmético aleatorio que no tengas.</p>
+        <button class="btn" id="buyCosmeticBox">Abrir caja (450 monedas)</button>
+      </div>
+
+      <div class="daily-mission-card" id="shopPreviewCard" style="margin-top: 14px;">
+        <h3>🔍 Comparación antes/después</h3>
+        <p id="shopPreviewText">Selecciona un artículo para comparar con tu equipamiento actual.</p>
+      </div>
+
+      <div class="daily-mission-card" id="manufacturerMissionCard" style="margin-top: 14px;">
+        <h3>🏁 Misión del fabricante</h3>
+        <p id="manufacturerMissionText">-</p>
+      </div>
+
+      <div class="daily-mission-card" id="purchaseHistoryCard" style="margin-top: 14px;">
+        <h3>🧾 Historial de compras</h3>
+        <p id="purchaseHistoryText">Sin compras recientes.</p>
+      </div>
       <div class="shop-actions">
         <button class="btn large" id="backFromShop">
           ◀️ Volver al Menú
