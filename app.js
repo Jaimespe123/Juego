@@ -1981,6 +1981,7 @@
     if(left)  steerInput += 1;
     if(right) steerInput -= 1;
     if(mouseActive && Math.abs(mouseX)>0.05) steerInput += mouseX * steerProfile.mouseFactor;
+    if(mouseActive && Math.abs(mouseX)>0.05) steerInput += mouseX * 0.82;
     steerInput = clamp(steerInput, -1, 1);
 
     // Ángulo máximo de las ruedas (se reduce a alta velocidad para estabilidad)
@@ -1991,6 +1992,11 @@
     carState.targetWheelAngle = steerInput * maxSteer;
     // Suavizar giro de ruedas
     carState.wheelAngle = lerp(carState.wheelAngle, carState.targetWheelAngle, dt*steerProfile.response);
+    const maxSteer = Math.PI/5.5 * (1 - speedNorm*0.52); // más giro a baja velocidad, más estabilidad a alta
+
+    carState.targetWheelAngle = steerInput * maxSteer;
+    // Suavizar giro de ruedas
+    carState.wheelAngle = lerp(carState.wheelAngle, carState.targetWheelAngle, dt*10);
 
     // --- Aceleración / frenado ---
     let accel = CONFIG.ACCELERATION;
@@ -2051,6 +2057,7 @@
 
     // --- Giro (yaw) basado en ángulo de ruedas y velocidad ---
     const turnRate = (carState.wheelAngle / steerProfile.steerBase) * CONFIG.TURN_SPEED;
+    const turnRate = (carState.wheelAngle / (Math.PI/5.5)) * CONFIG.TURN_SPEED;
     if(speed > 0.015){
       // El giro es proporcional a la velocidad frontal
       const turnSign = velDot >= 0 ? 1 : -1;
