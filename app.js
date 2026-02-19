@@ -12,9 +12,9 @@
     MAX_SPEED: 0.48,
     ACCELERATION: 0.018,
     BRAKE_FORCE: 0.03,
-    FRICTION: 0.975,
-    LATERAL_FRICTION: 0.88,       // fricción lateral (menor = más drifting)
-    TURN_SPEED: 0.028,
+    FRICTION: 0.982,
+    LATERAL_FRICTION: 0.92,       // fricción lateral (más alta = coche más estable)
+    TURN_SPEED: 0.031,
     COLLISION_DIST: 1.88,
     DRIFT_THRESHOLD: 0.25,
     MAX_DUST_PARTICLES: 160,
@@ -104,7 +104,7 @@
 
   let playerData = {
     totalCoins:0, ownedColors:[0], currentColorIndex:0,
-    mouseSensitivity:1, bestScore:0, totalKills:0, gamesPlayed:0,
+    bestScore:0, totalKills:0, gamesPlayed:0,
     leaderboard: [],
     leaderboardSort: 'score',
     achievements: [],
@@ -124,10 +124,6 @@
         if(!Array.isArray(playerData.achievements)) playerData.achievements = [];
         if(!playerData.leaderboardSort) playerData.leaderboardSort = 'score';
         if(typeof playerData.nightLightBoost !== 'number') playerData.nightLightBoost = 1.2;
-      }
-      if(elements.mouseSensitivity) {
-        elements.mouseSensitivity.value = playerData.mouseSensitivity || 1;
-        updateMouseSensitivityDisplay();
       }
       if(elements.nightLightBoost) {
         elements.nightLightBoost.value = playerData.nightLightBoost || 1.2;
@@ -184,8 +180,6 @@
     volMasterVal:       document.getElementById('volMasterVal'),
     volEngineVal:       document.getElementById('volEngineVal'),
     volSfxVal:          document.getElementById('volSfxVal'),
-    mouseSensitivity:   document.getElementById('mouseSensitivity'),
-    mouseSensitivityVal:document.getElementById('mouseSensitivityVal'),
     nightLightBoost:    document.getElementById('nightLightBoost'),
     nightLightBoostVal: document.getElementById('nightLightBoostVal'),
     inGameMsg:          document.getElementById('inGameMsg'),
@@ -209,7 +203,7 @@
 
   const { overlayMenu, overlayShop, overlayGameOver,
           scoreEl, hpEl, speedEl, coinsEl,
-          volMaster, volEngine, volSfx, mouseSensitivity } = elements;
+          volMaster, volEngine, volSfx } = elements;
 
   function inGameMessage(text, ms=2000){
     if(!elements.inGameMsg) return;
@@ -416,12 +410,7 @@
   volEngine.addEventListener('input', e=>{ elements.volEngineVal.innerText=Math.round(e.target.value*100)+'%'; updateAudioGains(); });
   volSfx.addEventListener('input',   e=>{ elements.volSfxVal.innerText=Math.round(e.target.value*100)+'%';   updateAudioGains(); });
 
-  function updateMouseSensitivityDisplay(){ elements.mouseSensitivityVal.innerText=Math.round(elements.mouseSensitivity.value*100)+'%'; }
   function updateNightLightBoostDisplay(){ if(elements.nightLightBoostVal) elements.nightLightBoostVal.innerText=Math.round(elements.nightLightBoost.value*100)+'%'; }
-  elements.mouseSensitivity.addEventListener('input', e=>{
-    playerData.mouseSensitivity=parseFloat(e.target.value);
-    updateMouseSensitivityDisplay(); savePlayerData();
-  });
   if(elements.nightLightBoost) elements.nightLightBoost.addEventListener('input', e=>{
     playerData.nightLightBoost=parseFloat(e.target.value);
     updateNightLightBoostDisplay();
@@ -678,6 +667,7 @@
   // ✅ Mini-mapa
   let minimapCanvas = null;
   let minimapCtx = null;
+  let minimapAccumulator = 0;
   
   // ✨ Referencias de iluminación para atmósferas dinámicas
   let ambientLight = null;
@@ -694,9 +684,9 @@
 
       carState.velocity = new THREE.Vector3();
 
-      renderer = new THREE.WebGLRenderer({ antialias:true, powerPreference:'high-performance' });
+      renderer = new THREE.WebGLRenderer({ antialias:false, powerPreference:'high-performance' });
       renderer.setSize(window.innerWidth, window.innerHeight);
-      renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+      renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.5));
       renderer.shadowMap.enabled = true;
       renderer.shadowMap.type = THREE.PCFSoftShadowMap;
       renderer.toneMapping = THREE.ACESFilmicToneMapping;
@@ -717,7 +707,7 @@
       sun = new THREE.DirectionalLight(0xffe8cc, 2.0);
       sun.position.set(100, 80, 60);
       sun.castShadow = true;
-      sun.shadow.mapSize.set(2048, 2048);
+      sun.shadow.mapSize.set(1024, 1024);
       sun.shadow.camera.left=-60; sun.shadow.camera.right=60;
       sun.shadow.camera.top=60; sun.shadow.camera.bottom=-60;
       sun.shadow.camera.near=0.1; sun.shadow.camera.far=300;
@@ -737,7 +727,7 @@
       try {
         composer = new THREE.EffectComposer(renderer);
         composer.addPass(new THREE.RenderPass(scene, camera));
-        composer.addPass(new THREE.UnrealBloomPass(new THREE.Vector2(window.innerWidth, window.innerHeight), 0.7, 0.4, 0.85));
+        composer.addPass(new THREE.UnrealBloomPass(new THREE.Vector2(window.innerWidth, window.innerHeight), 0.45, 0.35, 0.9));
       } catch(e){ console.warn('⚠️ Post-processing no disponible'); }
 
       // CONSTRUIR MUNDO
@@ -1844,17 +1834,17 @@
     let steerInput = 0;
     if(left)  steerInput += 1;
     if(right) steerInput -= 1;
-    if(mouseActive && Math.abs(mouseX)>0.05) steerInput += mouseX * playerData.mouseSensitivity;
+    if(mouseActive && Math.abs(mouseX)>0.05) steerInput += mouseX * 0.82;
     steerInput = clamp(steerInput, -1, 1);
 
     // Ángulo máximo de las ruedas (se reduce a alta velocidad para estabilidad)
     const speed = carState.velocity.length();
     const speedNorm = clamp(speed / CONFIG.MAX_SPEED, 0, 1);
-    const maxSteer = Math.PI/6 * (1 - speedNorm*0.45); // se reduce hasta 55% a máx velocidad
+    const maxSteer = Math.PI/5.5 * (1 - speedNorm*0.52); // más giro a baja velocidad, más estabilidad a alta
 
     carState.targetWheelAngle = steerInput * maxSteer;
     // Suavizar giro de ruedas
-    carState.wheelAngle = lerp(carState.wheelAngle, carState.targetWheelAngle, dt*8);
+    carState.wheelAngle = lerp(carState.wheelAngle, carState.targetWheelAngle, dt*10);
 
     // --- Aceleración / frenado ---
     let accel = CONFIG.ACCELERATION;
@@ -1893,13 +1883,13 @@
 
     // Fricción lateral (más fricción = menos drift)
     let latFric = CONFIG.LATERAL_FRICTION;
-    if(handbrake) latFric = 0.72;   // freno de mano: menos fricción lateral = drift
-    else if(brake) latFric = 0.80;
+    if(handbrake) latFric = 0.78;   // freno de mano: sigue derrapando, pero más controlable
+    else if(brake) latFric = 0.86;
 
     // Fricción frontal normal
     let frontFric = CONFIG.FRICTION;
-    if(brake) frontFric = 0.92;
-    if(handbrake) frontFric = 0.88;
+    if(brake) frontFric = 0.94;
+    if(handbrake) frontFric = 0.9;
 
     // Aplicar fricción separada
     const velFrontFriced = velForward.multiplyScalar(Math.pow(frontFric, dt*60));
@@ -1912,7 +1902,7 @@
     }
 
     // --- Giro (yaw) basado en ángulo de ruedas y velocidad ---
-    const turnRate = (carState.wheelAngle / (Math.PI/6)) * CONFIG.TURN_SPEED;
+    const turnRate = (carState.wheelAngle / (Math.PI/5.5)) * CONFIG.TURN_SPEED;
     if(speed > 0.015){
       // El giro es proporcional a la velocidad frontal
       const turnSign = velDot >= 0 ? 1 : -1;
@@ -1924,7 +1914,7 @@
 
     // --- Inclinación visual del coche ---
     // Roll en curvas (inclinación lateral)
-    const targetRoll = -steerInput * 0.18 * speedNorm;
+    const targetRoll = -steerInput * 0.14 * speedNorm;
     car.rotation.z = lerp(car.rotation.z, targetRoll, dt*7);
 
     // Pitch al acelerar/frenar
@@ -2541,8 +2531,12 @@
     if(elements.nitroBar) elements.nitroBar.style.width=(carState.nitro/carState.maxNitro*100)+'%';
     coinsEl.textContent = playerData.totalCoins + Math.floor(gameState.score/100);
 
-    // ✅ Dibujar mini-mapa cada frame
-    drawMinimap();
+    // ✅ Dibujar mini-mapa con límite para reducir carga de CPU
+    minimapAccumulator += dt;
+    if(minimapAccumulator >= 1/30){
+      drawMinimap();
+      minimapAccumulator = 0;
+    }
 
     // Render
     try { if(composer) composer.render(dt); else renderer.render(scene,camera); }
