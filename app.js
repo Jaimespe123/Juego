@@ -86,6 +86,9 @@
     mission:null,
     powerups: new Map(),
     hasShield:false, hasTurbo:false, hasMagnet:false, hasWeapon:false,
+    waveConfig:null,
+    waveEvent:null,
+    eventRollWave:0,
   };
 
   // Estado del coche con física real
@@ -109,6 +112,8 @@
     leaderboardSort: 'score',
     achievements: [],
     nightLightBoost: 1.2,
+    steeringMode: 'normal',
+    dailyMission: null,
     upgrades: JSON.parse(JSON.stringify(SHOP_UPGRADES)),
   };
 
@@ -124,7 +129,10 @@
         if(!Array.isArray(playerData.achievements)) playerData.achievements = [];
         if(!playerData.leaderboardSort) playerData.leaderboardSort = 'score';
         if(typeof playerData.nightLightBoost !== 'number') playerData.nightLightBoost = 1.2;
+        if(!playerData.steeringMode) playerData.steeringMode = 'normal';
       }
+      if(elements.steeringMode) elements.steeringMode.value = playerData.steeringMode || 'normal';
+      ensureDailyMission();
       if(elements.nightLightBoost) {
         elements.nightLightBoost.value = playerData.nightLightBoost || 1.2;
         updateNightLightBoostDisplay();
@@ -180,6 +188,16 @@
     volMasterVal:       document.getElementById('volMasterVal'),
     volEngineVal:       document.getElementById('volEngineVal'),
     volSfxVal:          document.getElementById('volSfxVal'),
+    steeringMode:       document.getElementById('steeringMode'),
+    openTutorial:       document.getElementById('openTutorial'),
+    overlayTutorial:    document.getElementById('overlayTutorial'),
+    startTutorialRun:   document.getElementById('startTutorialRun'),
+    nextTutorialStep:   document.getElementById('nextTutorialStep'),
+    backFromTutorial:   document.getElementById('backFromTutorial'),
+    tutorialStepTitle:  document.getElementById('tutorialStepTitle'),
+    tutorialStepText:   document.getElementById('tutorialStepText'),
+    dailyMissionText:   document.getElementById('dailyMissionText'),
+    claimDailyMission:  document.getElementById('claimDailyMission'),
     nightLightBoost:    document.getElementById('nightLightBoost'),
     nightLightBoostVal: document.getElementById('nightLightBoostVal'),
     inGameMsg:          document.getElementById('inGameMsg'),
@@ -278,6 +296,83 @@
     
     // Sonido especial para combo
     playPowerupSfx();
+  }
+
+
+  const TUTORIAL_STEPS = [
+    { id:'drift', title:'Paso 1: Drift', text:'Pulsa Shift mientras giras para derrapar y controlar la curva.' },
+    { id:'nitro', title:'Paso 2: Nitro', text:'Pulsa N para activar nitro y ganar velocidad en recta.' },
+    { id:'weapon', title:'Paso 3: Arma', text:'Pulsa E o click para disparar y eliminar un zombie.' },
+  ];
+  const tutorialState = { enabled:false, step:0, completed:new Set() };
+
+  function getTodayKey(){ return new Date().toISOString().slice(0,10); }
+  function ensureDailyMission(){
+    const today = getTodayKey();
+    if(playerData.dailyMission && playerData.dailyMission.dayKey===today) return;
+    const pool = [
+      { type:'kill', target:18, reward:90, label:'Elimina 18 zombies' },
+      { type:'coin', target:30, reward:110, label:'Recoge 30 monedas' },
+      { type:'wave', target:3, reward:130, label:'Supera 3 oleadas' },
+    ];
+    const pick = pool[Math.floor(Math.random()*pool.length)];
+    playerData.dailyMission = { dayKey:today, ...pick, progress:0, claimed:false };
+    savePlayerData();
+  }
+
+  function updateDailyMissionUI(){
+    if(!elements.dailyMissionText || !elements.claimDailyMission) return;
+    ensureDailyMission();
+    const m = playerData.dailyMission;
+    const done = m.progress >= m.target;
+    elements.dailyMissionText.textContent = `${m.label} — ${m.progress}/${m.target} · Recompensa: ${m.reward} monedas`;
+    elements.claimDailyMission.disabled = !done || !!m.claimed;
+    elements.claimDailyMission.textContent = m.claimed ? '✅ Reclamada' : 'Reclamar recompensa';
+  }
+
+  function updateDailyMissionProgress(type, amount=1){
+    ensureDailyMission();
+    const m = playerData.dailyMission;
+    if(!m || m.claimed || m.type!==type) return;
+    m.progress = Math.min(m.target, m.progress + amount);
+    if(m.progress >= m.target) inGameMessage('📅 ¡Misión diaria completada! Reclama tu recompensa en menú.', 2200);
+    savePlayerData();
+    updateDailyMissionUI();
+  }
+
+  function claimDailyMission(){
+    const m = playerData.dailyMission;
+    if(!m || m.claimed || m.progress < m.target) return;
+    m.claimed = true;
+    playerData.totalCoins += m.reward;
+    savePlayerData();
+    updateDailyMissionUI();
+    updateMenuStats();
+    inGameMessage(`💰 Recompensa diaria: +${m.reward} monedas`, 2200);
+  }
+
+  function updateTutorialOverlay(){
+    const step = TUTORIAL_STEPS[Math.min(tutorialState.step, TUTORIAL_STEPS.length-1)];
+    if(elements.tutorialStepTitle) elements.tutorialStepTitle.textContent = step.title;
+    if(elements.tutorialStepText) elements.tutorialStepText.textContent = step.text;
+  }
+
+  function markTutorialStep(id){
+    if(!tutorialState.enabled) return;
+    const expected = TUTORIAL_STEPS[tutorialState.step];
+    if(!expected || expected.id!==id) return;
+    tutorialState.completed.add(id);
+    tutorialState.step++;
+    if(tutorialState.step >= TUTORIAL_STEPS.length){
+      tutorialState.enabled = false;
+      playerData.totalCoins += 60;
+      savePlayerData();
+      inGameMessage('🎓 Tutorial completado: +60 monedas', 2400);
+      return;
+    }
+    if(TUTORIAL_STEPS[tutorialState.step].id==='weapon') gameState.hasWeapon = true;
+    updateTutorialOverlay();
+    inGameMessage(`✅ ${expected.title} completado`, 1500);
   }
 
   // ========== CONTROL DE UI ==========
@@ -411,6 +506,11 @@
   volSfx.addEventListener('input',   e=>{ elements.volSfxVal.innerText=Math.round(e.target.value*100)+'%';   updateAudioGains(); });
 
   function updateNightLightBoostDisplay(){ if(elements.nightLightBoostVal) elements.nightLightBoostVal.innerText=Math.round(elements.nightLightBoost.value*100)+'%'; }
+  if(elements.steeringMode) elements.steeringMode.addEventListener('change', e=>{
+    playerData.steeringMode = e.target.value;
+    savePlayerData();
+    inGameMessage(`🎮 Modo de giro: ${e.target.selectedOptions[0].textContent}`, 1400);
+  });
   if(elements.nightLightBoost) elements.nightLightBoost.addEventListener('input', e=>{
     playerData.nightLightBoost=parseFloat(e.target.value);
     updateNightLightBoostDisplay();
@@ -424,6 +524,16 @@
   });
   elements.openSettings.addEventListener('click', ()=>{ elements.settingsPanel.style.display='block'; });
   elements.closeSettings.addEventListener('click', ()=>{ elements.settingsPanel.style.display='none'; });
+  if(elements.claimDailyMission) elements.claimDailyMission.addEventListener('click', claimDailyMission);
+  if(elements.openTutorial) elements.openTutorial.addEventListener('click', ()=>{ overlayMenu.style.display='none'; if(elements.overlayTutorial) elements.overlayTutorial.style.display='block'; updateTutorialOverlay(); });
+  if(elements.backFromTutorial) elements.backFromTutorial.addEventListener('click', ()=>{ if(elements.overlayTutorial) elements.overlayTutorial.style.display='none'; overlayMenu.style.display='block'; updateMenuStats(); });
+  if(elements.nextTutorialStep) elements.nextTutorialStep.addEventListener('click', ()=>{ tutorialState.step = (tutorialState.step + 1) % TUTORIAL_STEPS.length; updateTutorialOverlay(); });
+  if(elements.startTutorialRun) elements.startTutorialRun.addEventListener('click', ()=>{
+    tutorialState.enabled = true; tutorialState.step = 0; tutorialState.completed.clear();
+    if(elements.overlayTutorial) elements.overlayTutorial.style.display='none';
+    startGame();
+    inGameMessage('📘 Tutorial activo: completa los 3 pasos', 2200);
+  });
 
   elements.startBtn.addEventListener('click', ()=>{
     try { startGame(); } catch(e){ console.error('❌ Error:', e); alert('Error: '+e.message); }
@@ -501,6 +611,7 @@
     if(menuBestScore) menuBestScore.textContent = playerData.bestScore || 0;
     if(menuCoins) menuCoins.textContent = playerData.totalCoins || 0;
     if(menuGames) menuGames.textContent = playerData.gamesPlayed || 0;
+    updateDailyMissionUI();
   }
 
 
@@ -1226,13 +1337,38 @@
     }
   }
 
+
+  function getWaveConfig(wave){
+    if(wave<=2) return { spawnDelay:2600, maxZombies:4+wave, zombieSpeedMult:0.78+wave*0.08, killTarget:16, coinChance:0.0035, weights:{normal:0.66, fast:0.2, tank:0.1, explosive:0.04} };
+    if(wave<=5) return { spawnDelay:1800, maxZombies:8+wave, zombieSpeedMult:0.95+wave*0.04, killTarget:20, coinChance:0.004, weights:{normal:0.5, fast:0.28, tank:0.14, explosive:0.08} };
+    if(wave<=10) return { spawnDelay:Math.max(900, 1500-wave*55), maxZombies:12+Math.floor(wave*1.4), zombieSpeedMult:1.08+(wave-5)*0.07, killTarget:24, coinChance:0.0045, weights:{normal:0.42, fast:0.3, tank:0.18, explosive:0.1} };
+    return { spawnDelay:Math.max(550, 1000-wave*20), maxZombies:Math.min(36, 20+Math.floor(wave*1.5)), zombieSpeedMult:1.45+(wave-10)*0.05, killTarget:28, coinChance:0.0048, weights:{normal:0.35, fast:0.32, tank:0.2, explosive:0.13} };
+  }
+
+  function maybeStartWaveEvent(){
+    if(gameState.wave < 3 || gameState.waveEvent) return;
+    if(gameState.eventRollWave === gameState.wave) return;
+    gameState.eventRollWave = gameState.wave;
+    if(Math.random() > 0.45) return;
+    const roll = Math.random();
+    if(roll < 0.34){
+      gameState.waveEvent = { type:'fast_horde', title:'⚡ Evento: Horda rápida', until: gameState.zombiesKilledThisWave + 10 };
+    } else if(roll < 0.67){
+      gameState.waveEvent = { type:'tank_assault', title:'🛡️ Evento: Asalto tanque', until: gameState.zombiesKilledThisWave + 8 };
+    } else {
+      gameState.waveEvent = { type:'coin_rush', title:'💰 Evento: Lluvia de monedas', until: gameState.zombiesKilledThisWave + 12 };
+    }
+    inGameMessage(gameState.waveEvent.title, 2000);
+  }
+
   // ========== SPAWN ZOMBIES / POWERUPS ==========
-  function spawnZombie(){
+  function spawnZombie(weights){
+    const w = weights || {normal:0.5, fast:0.25, tank:0.15, explosive:0.1};
     const rand = Math.random();
     let type;
-    if(rand<0.5) type=ZOMBIE_TYPES.NORMAL;
-    else if(rand<0.75) type=ZOMBIE_TYPES.FAST;
-    else if(rand<0.9) type=ZOMBIE_TYPES.TANK;
+    if(rand<w.normal) type=ZOMBIE_TYPES.NORMAL;
+    else if(rand<w.normal + w.fast) type=ZOMBIE_TYPES.FAST;
+    else if(rand<w.normal + w.fast + w.tank) type=ZOMBIE_TYPES.TANK;
     else type=ZOMBIE_TYPES.EXPLOSIVE;
 
     const zombie = new THREE.Group();
@@ -1738,6 +1874,7 @@
     }
 
     updateMissionHud();
+    updateDailyMissionProgress(type, amount);
   }
 
   // ========== CONTROLES ==========
@@ -1790,6 +1927,7 @@
     lastShotTime = now;
 
     playShootSfx();
+    markTutorialStep('weapon');
 
     const bullet = new THREE.Group();
     const coreMat = new THREE.MeshStandardMaterial({ color:0xfff08a, emissive:0xffdd55, emissiveIntensity:1.2 });
@@ -1818,6 +1956,13 @@
     spawnDust(bullet.position.clone(), 3);
   }
 
+  function getSteeringProfile(){
+    const mode = playerData.steeringMode || 'normal';
+    if(mode==='soft') return { mouseFactor:0.7, response:7.2, steerBase:Math.PI/5.8, highSpeedStability:0.58 };
+    if(mode==='direct') return { mouseFactor:0.92, response:12, steerBase:Math.PI/5.2, highSpeedStability:0.48 };
+    return { mouseFactor:0.82, response:10, steerBase:Math.PI/5.5, highSpeedStability:0.52 };
+  }
+
   // ========== FÍSICA DEL COCHE (mejorada con drifting real) ==========
   function updateCarPhysics(dt){
     if(!car || !carState.velocity || gameState.paused) return;
@@ -1831,15 +1976,22 @@
     const nitro    = keys['n'] && carState.nitro>0;
 
     // --- Entrada de dirección ---
+    const steerProfile = getSteeringProfile();
     let steerInput = 0;
     if(left)  steerInput += 1;
     if(right) steerInput -= 1;
+    if(mouseActive && Math.abs(mouseX)>0.05) steerInput += mouseX * steerProfile.mouseFactor;
     if(mouseActive && Math.abs(mouseX)>0.05) steerInput += mouseX * 0.82;
     steerInput = clamp(steerInput, -1, 1);
 
     // Ángulo máximo de las ruedas (se reduce a alta velocidad para estabilidad)
     const speed = carState.velocity.length();
     const speedNorm = clamp(speed / CONFIG.MAX_SPEED, 0, 1);
+    const maxSteer = steerProfile.steerBase * (1 - speedNorm*steerProfile.highSpeedStability); // configurable por modo
+
+    carState.targetWheelAngle = steerInput * maxSteer;
+    // Suavizar giro de ruedas
+    carState.wheelAngle = lerp(carState.wheelAngle, carState.targetWheelAngle, dt*steerProfile.response);
     const maxSteer = Math.PI/5.5 * (1 - speedNorm*0.52); // más giro a baja velocidad, más estabilidad a alta
 
     carState.targetWheelAngle = steerInput * maxSteer;
@@ -1859,6 +2011,7 @@
     }
 
     document.body.classList.toggle('nitro-active', nitro || gameState.hasTurbo);
+    if(nitro) markTutorialStep('nitro');
 
     // Vector de dirección del coche
     const carDir = new THREE.Vector3(0,0,-1).applyQuaternion(car.quaternion);
@@ -1879,6 +2032,7 @@
 
     // Calcular drift
     const isDrifting = handbrake || (lateralSpeed > 0.05 && speed > 0.08);
+    if(isDrifting) markTutorialStep('drift');
     carState.driftAmount = lerp(carState.driftAmount, isDrifting ? 1 : 0, dt*6);
 
     // Fricción lateral (más fricción = menos drift)
@@ -1902,6 +2056,7 @@
     }
 
     // --- Giro (yaw) basado en ángulo de ruedas y velocidad ---
+    const turnRate = (carState.wheelAngle / steerProfile.steerBase) * CONFIG.TURN_SPEED;
     const turnRate = (carState.wheelAngle / (Math.PI/5.5)) * CONFIG.TURN_SPEED;
     if(speed > 0.015){
       // El giro es proporcional a la velocidad frontal
@@ -2402,31 +2557,40 @@
     dustGeom.attributes.aLifetime.needsUpdate=true;
 
     if(gameState.running && !gameState.paused){
-      // --- DIFICULTAD PROGRESIVA ---
-      const wave=gameState.wave;
-      let spawnDelay, maxZombies, zombieSpeedMult;
+      // --- DIFICULTAD PROGRESIVA + EVENTOS DE OLEADA ---
+      gameState.waveConfig = getWaveConfig(gameState.wave);
+      const cfg = gameState.waveConfig;
+      maybeStartWaveEvent();
 
-      if(wave===1){       spawnDelay=3000; maxZombies=3;  zombieSpeedMult=0.7; }
-      else if(wave===2){  spawnDelay=2500; maxZombies=5;  zombieSpeedMult=0.8; }
-      else if(wave===3){  spawnDelay=2000; maxZombies=7;  zombieSpeedMult=0.9; }
-      else if(wave<=5){   spawnDelay=1600; maxZombies=8+(wave-3)*2; zombieSpeedMult=1.0; }
-      else if(wave<=10){  spawnDelay=Math.max(800,1400-(wave-5)*100); maxZombies=12+(wave-5)*1.5; zombieSpeedMult=1.0+(wave-5)*0.08; }
-      else {              spawnDelay=Math.max(500,800-(wave-10)*30);  maxZombies=Math.min(35,18+(wave-10)*1.2); zombieSpeedMult=1.4+(wave-10)*0.05; }
+      let waveWeights = { ...cfg.weights };
+      let coinChance = cfg.coinChance;
+      if(gameState.waveEvent){
+        if(gameState.waveEvent.type==='fast_horde'){ waveWeights = {normal:0.2, fast:0.62, tank:0.1, explosive:0.08}; }
+        if(gameState.waveEvent.type==='tank_assault'){ waveWeights = {normal:0.2, fast:0.16, tank:0.5, explosive:0.14}; }
+        if(gameState.waveEvent.type==='coin_rush') coinChance = 0.008;
+        if(gameState.zombiesKilledThisWave >= gameState.waveEvent.until){
+          gameState.waveEvent = null;
+          inGameMessage('✅ Evento finalizado', 1200);
+        }
+      }
 
-      if(now-gameState.lastSpawn>spawnDelay){
-        if(zombies.length<maxZombies) spawnZombie();
+      if(now-gameState.lastSpawn>cfg.spawnDelay){
+        if(zombies.length<cfg.maxZombies){
+          spawnZombie(waveWeights);
+          if(gameState.waveEvent && gameState.waveEvent.type==='fast_horde' && Math.random()<0.35 && zombies.length<cfg.maxZombies) spawnZombie(waveWeights);
+        }
         gameState.lastSpawn=now;
       }
 
       // Power-ups
       if(Math.random()<0.0009 && powerups.length<3) spawnPowerup();
-      
-      // 💰 Monedas - spawn frecuente
-      if(Math.random()<0.004 && coins.length<15) spawnCoin();
+
+      // 💰 Monedas
+      if(Math.random()<coinChance && coins.length<18) spawnCoin();
 
       // Updates
       updateCarPhysics(dt);
-      checkZombies(dt, zombieSpeedMult);
+      checkZombies(dt, cfg.zombieSpeedMult);
       checkPowerups(dt);
       updateCoins(dt); // 💰 Actualizar monedas
       updateBullets(dt);
@@ -2458,8 +2622,9 @@
       }
 
       // Oleadas con cambio de atmósfera
-      if(gameState.zombiesKilledThisWave>=20){
+      if(gameState.zombiesKilledThisWave>=gameState.waveConfig.killTarget){
         gameState.wave++;
+        updateDailyMissionProgress('wave', 1);
         gameState.zombiesKilledThisWave=0;
         
         // ✨ Cambiar atmósfera cada oleada
@@ -2554,6 +2719,9 @@
     gameState.score=0; gameState.hp=gameState.maxHp;
     gameState.combo=0; gameState.comboTimer=0; gameState.maxCombo=0;
     gameState.kills=0; gameState.wave=1; gameState.zombiesKilledThisWave=0;
+    gameState.waveConfig = getWaveConfig(1);
+    gameState.waveEvent = null;
+    gameState.eventRollWave = 0;
     gameState.lastSpawn=performance.now();
     gameState.powerups.clear();
     gameState.hasShield=false; gameState.hasTurbo=false; gameState.hasMagnet=false; gameState.hasWeapon=false;
@@ -2561,6 +2729,7 @@
 
     Object.keys(keys).forEach(k=> keys[k]=false);
     mouseActive=false;
+    tutorialState.enabled = false;
     camShake.intensity=0; camShake.decay=0;
     const comboMsg = document.getElementById('bigComboMessage'); if(comboMsg) comboMsg.remove();
     lastBigMessageCombo = 0;
@@ -2589,10 +2758,12 @@
   }
 
   function startGame(){
+    const tutorialWasRequested = tutorialState.enabled;
     if(!scene||!car){ alert('Error: Escena no inicializada. Recarga la página.'); return; }
     if(gameState.running) return;
     showHUD();
     resetGame();
+    if(tutorialWasRequested){ tutorialState.enabled = true; tutorialState.step = 0; updateTutorialOverlay(); }
     gameState.running=true; gameState.paused=false;
     overlayMenu.style.display='none'; overlayShop.style.display='none'; overlayGameOver.style.display='none';
     hideBackgroundCanvas();
