@@ -143,6 +143,10 @@
               <span class="btn-icon">⚙️</span>
               <span class="btn-text">Ajustes</span>
             </button>
+            <button class="btn-hero secondary" id="openTutorial">
+              <span class="btn-icon">📘</span>
+              <span class="btn-text">Tutorial</span>
+            </button>
           </div>
         </div>
         
@@ -160,6 +164,13 @@
           <div class="control-tip">
             <kbd>N</kbd> <span>Nitro</span>
           </div>
+        </div>
+
+
+        <div class="daily-mission-card" id="dailyMissionCard">
+          <h3>📅 Misión diaria</h3>
+          <p id="dailyMissionText">-</p>
+          <button class="btn primary" id="claimDailyMission" disabled>Reclamar recompensa</button>
         </div>
 
         <!-- Footer con versión -->
@@ -194,6 +205,34 @@
         <!-- Las mejoras se generan dinámicamente aquí -->
       </div>
 
+
+      <h2 style="margin-top: 24px; font-size: 18px; color: var(--accent);">🧩 Estilo del Coche</h2>
+      <p style="font-size: 13px; color: var(--muted); margin-bottom: 10px;">Skins temáticas, llantas, neones y alerones con rareza.</p>
+      <div id="cosmeticsGrid" style="display:grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 10px;"></div>
+
+      <h2 style="margin-top: 20px; font-size: 18px; color: var(--accent);">🔥 Ofertas rotativas</h2>
+      <div id="featuredOffers" style="display:grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 10px;"></div>
+
+      <div class="daily-mission-card" style="margin-top: 14px;">
+        <h3>🎁 Caja cosmética (monedas)</h3>
+        <p>Consigue un cosmético aleatorio que no tengas.</p>
+        <button class="btn" id="buyCosmeticBox">Abrir caja (450 monedas)</button>
+      </div>
+
+      <div class="daily-mission-card" id="shopPreviewCard" style="margin-top: 14px;">
+        <h3>🔍 Comparación antes/después</h3>
+        <p id="shopPreviewText">Selecciona un artículo para comparar con tu equipamiento actual.</p>
+      </div>
+
+      <div class="daily-mission-card" id="manufacturerMissionCard" style="margin-top: 14px;">
+        <h3>🏁 Misión del fabricante</h3>
+        <p id="manufacturerMissionText">-</p>
+      </div>
+
+      <div class="daily-mission-card" id="purchaseHistoryCard" style="margin-top: 14px;">
+        <h3>🧾 Historial de compras</h3>
+        <p id="purchaseHistoryText">Sin compras recientes.</p>
+      </div>
       <div class="shop-actions">
         <button class="btn large" id="backFromShop">
           ◀️ Volver al Menú
@@ -382,6 +421,24 @@
       </div>
     </section>
 
+
+    <!-- TUTORIAL INTERACTIVO -->
+    <section id="overlayTutorial" class="overlay" style="display:none; max-width: 760px;" role="dialog" aria-labelledby="tutorialTitle" aria-modal="true">
+      <h1 id="tutorialTitle">📘 Tutorial interactivo</h1>
+      <p style="color: var(--muted); font-size: 14px;">Aprende lo esencial en 3 pasos para dominar coche, nitro y combate.</p>
+
+      <div class="daily-mission-card">
+        <h3 id="tutorialStepTitle">Paso 1</h3>
+        <p id="tutorialStepText">Pulsa Shift mientras giras para derrapar.</p>
+      </div>
+
+      <div class="shop-actions" style="display:flex; gap:10px; flex-wrap:wrap; justify-content:center;">
+        <button class="btn primary large" id="startTutorialRun">▶️ Iniciar tutorial</button>
+        <button class="btn large" id="nextTutorialStep">Siguiente paso</button>
+        <button class="btn" id="backFromTutorial">◀️ Volver al menú</button>
+      </div>
+    </section>
+
     <!-- GAME OVER -->
     <section id="overlayGameOver" class="overlay" style="display:none" role="dialog" aria-labelledby="goTitle" aria-modal="true">
       <h1 id="goTitle">Game Over</h1>
@@ -467,21 +524,16 @@
             aria-valuenow="90">
         </div>
         
+
         <div class="setting">
-          <label for="mouseSensitivity">
-            🖱️ Sensibilidad del ratón
-            <span id="mouseSensitivityVal" class="setting-value">100%</span>
+          <label for="steeringMode">
+            🎮 Suavizado de giro
           </label>
-          <input 
-            id="mouseSensitivity" 
-            type="range" 
-            min="0.1" 
-            max="2" 
-            step="0.1" 
-            value="1"
-            aria-valuemin="10"
-            aria-valuemax="200"
-            aria-valuenow="100">
+          <select id="steeringMode" class="setting-select">
+            <option value="soft">Suave</option>
+            <option value="normal" selected>Normal</option>
+            <option value="direct">Directo</option>
+          </select>
         </div>
 
         <div class="setting">

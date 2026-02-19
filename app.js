@@ -12,9 +12,9 @@
     MAX_SPEED: 0.48,
     ACCELERATION: 0.018,
     BRAKE_FORCE: 0.03,
-    FRICTION: 0.975,
-    LATERAL_FRICTION: 0.88,       // fricción lateral (menor = más drifting)
-    TURN_SPEED: 0.028,
+    FRICTION: 0.982,
+    LATERAL_FRICTION: 0.92,       // fricción lateral (más alta = coche más estable)
+    TURN_SPEED: 0.031,
     COLLISION_DIST: 1.88,
     DRIFT_THRESHOLD: 0.25,
     MAX_DUST_PARTICLES: 160,
@@ -46,6 +46,101 @@
   };
 
   // ========== TIENDA ==========
+
+  function getCosmeticById(id){ return SHOP_COSMETICS.find(c=>c.id===id); }
+
+  function ensureShopRotation(){
+    const dayKey = new Date().toISOString().slice(0,10);
+    if(playerData.shopRotation && playerData.shopRotation.dayKey===dayKey) return;
+    const offers = SHOP_COSMETICS.slice().sort(()=>Math.random()-0.5).slice(0,3).map(c=>({id:c.id, discount:0.25}));
+    playerData.shopRotation = { dayKey, offers };
+    savePlayerData();
+  }
+
+  function ensureManufacturerMission(){
+    const dayKey = new Date().toISOString().slice(0,10);
+    if(playerData.manufacturerMission && playerData.manufacturerMission.dayKey===dayKey) return;
+    const options = [
+      { type:'wave_with_color', label:'Completa 3 oleadas con color rojo equipado', target:3, progress:0, colorIndex:1, rewardCoins:170, rewardRep:1, claimed:false },
+      { type:'buy_cosmetics', label:'Compra 2 cosméticos en la tienda', target:2, progress:0, rewardCoins:140, rewardRep:1, claimed:false },
+    ];
+    playerData.manufacturerMission = { dayKey, ...options[Math.floor(Math.random()*options.length)] };
+    savePlayerData();
+  }
+
+  function updateManufacturerMissionUI(){
+    if(!elements.manufacturerMissionText) return;
+    ensureManufacturerMission();
+    const m = playerData.manufacturerMission;
+    const status = `${m.label} — ${m.progress}/${m.target} · Premio: ${m.rewardCoins} monedas + ${m.rewardRep} reputación`;
+    elements.manufacturerMissionText.textContent = m.claimed ? `✅ ${status}` : status;
+  }
+
+  function updateManufacturerMissionProgress(type, amount=1){
+    ensureManufacturerMission();
+    const m = playerData.manufacturerMission;
+    if(!m || m.claimed || m.type!==type) return;
+    m.progress = Math.min(m.target, m.progress + amount);
+    if(m.progress >= m.target){
+      m.claimed = true;
+      playerData.totalCoins += m.rewardCoins;
+      playerData.reputation += m.rewardRep;
+      inGameMessage('🏁 Misión de fabricante completada', 2200);
+    }
+    savePlayerData();
+    updateManufacturerMissionUI();
+    updateMenuStats();
+  }
+
+  function addPurchaseHistory(name, price){
+    playerData.purchaseHistory.unshift({ name, price, at: Date.now() });
+    playerData.purchaseHistory = playerData.purchaseHistory.slice(0,8);
+  }
+
+  function renderPurchaseHistory(){
+    if(!elements.purchaseHistoryText) return;
+    if(!playerData.purchaseHistory.length){ elements.purchaseHistoryText.textContent = 'Sin compras recientes.'; return; }
+    elements.purchaseHistoryText.innerHTML = playerData.purchaseHistory.map(h=>`• ${h.name} — ${h.price} monedas`).join('<br>');
+  }
+
+  function updateShopPreview(item){
+    if(!elements.shopPreviewText) return;
+    if(!item){ elements.shopPreviewText.textContent = 'Selecciona un artículo para comparar con tu equipamiento actual.'; return; }
+    const equippedId = playerData.equippedCosmetics[item.category];
+    const equipped = equippedId ? getCosmeticById(equippedId) : null;
+    elements.shopPreviewText.textContent = `Antes: ${equipped ? equipped.name : 'Sin equipar'} · Después: ${item.name}`;
+  }
+
+  function applyCosmeticStyle(){
+    if(!car) return;
+    const theme = getCosmeticById(playerData.equippedCosmetics.theme);
+    const wheels = getCosmeticById(playerData.equippedCosmetics.wheels);
+    const neon = getCosmeticById(playerData.equippedCosmetics.neon);
+    const spoiler = getCosmeticById(playerData.equippedCosmetics.spoiler);
+
+    car.traverse(child=>{
+      if(child.isMesh && child.userData.isCarBody && theme){
+        child.material.color.setHex(theme.bodyColor || SHOP_COLORS[playerData.currentColorIndex].hex);
+        child.material.emissive.setHex(theme.bodyColor || SHOP_COLORS[playerData.currentColorIndex].hex);
+      }
+      if(child.isMesh && child.userData.isWheel && wheels && wheels.wheelColor){
+        child.material.color.setHex(wheels.wheelColor);
+      }
+    });
+
+    if(carNeon){
+      carNeon.visible = !!neon;
+      if(neon && neon.neonColor) carNeon.material.color.setHex(neon.neonColor);
+    }
+    if(carSpoiler){
+      carSpoiler.visible = !!spoiler;
+      if(spoiler && spoiler.id==='spoiler_gt') carSpoiler.scale.set(1.2,1.2,1.2);
+      else carSpoiler.scale.set(1,1,1);
+    }
+  }
+
+  function canAccessCosmetic(c){ return (playerData.reputation||0) >= (c.repRequired||0); }
+
   const SHOP_COLORS = [
     { name:'Azul Clásico',      hex:0x1f7ad2, price:0,    unlocked:true },
     { name:'Rojo Deportivo',    hex:0xff0000, price:500  },
@@ -68,6 +163,21 @@
     coinMultiplier: { name:'Multiplicador Monedas', baseCost:600, level:0, maxLevel:3, bonus:0.5 },
   };
 
+  const SHOP_COSMETICS = [
+    { id:'theme_rally', category:'theme', name:'Rally Pro', rarity:'Común', price:280, repRequired:0, bodyColor:0x2f7de1 },
+    { id:'theme_cyber', category:'theme', name:'Cyber Pulse', rarity:'Épico', price:920, repRequired:2, bodyColor:0x8f42ff, neonColor:0x00e5ff },
+    { id:'theme_classic', category:'theme', name:'Classic Heritage', rarity:'Raro', price:640, repRequired:1, bodyColor:0xfff2cc },
+    { id:'wheels_track', category:'wheels', name:'Llantas Track', rarity:'Común', price:260, repRequired:0, wheelColor:0x1a1a1a },
+    { id:'wheels_chrome', category:'wheels', name:'Llantas Chrome', rarity:'Raro', price:700, repRequired:2, wheelColor:0xb0bec5 },
+    { id:'neon_green', category:'neon', name:'Neón Verde', rarity:'Raro', price:520, repRequired:1, neonColor:0x00ff88 },
+    { id:'neon_magenta', category:'neon', name:'Neón Magenta', rarity:'Épico', price:980, repRequired:3, neonColor:0xff00cc },
+    { id:'spoiler_sport', category:'spoiler', name:'Alerón Sport', rarity:'Común', price:360, repRequired:0 },
+    { id:'spoiler_gt', category:'spoiler', name:'Alerón GT', rarity:'Legendario', price:1300, repRequired:4 },
+  ];
+
+  const COSMETIC_BOX_PRICE = 450;
+
+
   const STORAGE_KEY = 'carVsZombies_playerData';
   const ACHIEVEMENTS = [
     { id:'score_1000', label:'🔥 Rompe-Records', desc:'Alcanza 1000 puntos en una partida', check:(run)=>run.score>=1000 },
@@ -86,6 +196,9 @@
     mission:null,
     powerups: new Map(),
     hasShield:false, hasTurbo:false, hasMagnet:false, hasWeapon:false,
+    waveConfig:null,
+    waveEvent:null,
+    eventRollWave:0,
   };
 
   // Estado del coche con física real
@@ -104,11 +217,20 @@
 
   let playerData = {
     totalCoins:0, ownedColors:[0], currentColorIndex:0,
-    mouseSensitivity:1, bestScore:0, totalKills:0, gamesPlayed:0,
+    bestScore:0, totalKills:0, gamesPlayed:0,
     leaderboard: [],
     leaderboardSort: 'score',
     achievements: [],
     nightLightBoost: 1.2,
+    steeringMode: 'normal',
+    dailyMission: null,
+    shopRotation: null,
+    ownedCosmetics: ['theme_rally','wheels_track','spoiler_sport'],
+    equippedCosmetics: { theme:'theme_rally', wheels:'wheels_track', neon:null, spoiler:'spoiler_sport' },
+    reputation: 0,
+    manufacturerMission: null,
+    purchaseHistory: [],
+    shopPreviewSelectionId: null,
     upgrades: JSON.parse(JSON.stringify(SHOP_UPGRADES)),
   };
 
@@ -124,11 +246,16 @@
         if(!Array.isArray(playerData.achievements)) playerData.achievements = [];
         if(!playerData.leaderboardSort) playerData.leaderboardSort = 'score';
         if(typeof playerData.nightLightBoost !== 'number') playerData.nightLightBoost = 1.2;
+        if(!playerData.steeringMode) playerData.steeringMode = 'normal';
+        if(!Array.isArray(playerData.ownedCosmetics)) playerData.ownedCosmetics = ['theme_rally','wheels_track','spoiler_sport'];
+        if(!playerData.equippedCosmetics) playerData.equippedCosmetics = { theme:'theme_rally', wheels:'wheels_track', neon:null, spoiler:'spoiler_sport' };
+        if(typeof playerData.reputation !== 'number') playerData.reputation = 0;
+        if(!Array.isArray(playerData.purchaseHistory)) playerData.purchaseHistory = [];
       }
-      if(elements.mouseSensitivity) {
-        elements.mouseSensitivity.value = playerData.mouseSensitivity || 1;
-        updateMouseSensitivityDisplay();
-      }
+      if(elements.steeringMode) elements.steeringMode.value = playerData.steeringMode || 'normal';
+      ensureDailyMission();
+      ensureShopRotation();
+      ensureManufacturerMission();
       if(elements.nightLightBoost) {
         elements.nightLightBoost.value = playerData.nightLightBoost || 1.2;
         updateNightLightBoostDisplay();
@@ -184,14 +311,28 @@
     volMasterVal:       document.getElementById('volMasterVal'),
     volEngineVal:       document.getElementById('volEngineVal'),
     volSfxVal:          document.getElementById('volSfxVal'),
-    mouseSensitivity:   document.getElementById('mouseSensitivity'),
-    mouseSensitivityVal:document.getElementById('mouseSensitivityVal'),
+    steeringMode:       document.getElementById('steeringMode'),
+    openTutorial:       document.getElementById('openTutorial'),
+    overlayTutorial:    document.getElementById('overlayTutorial'),
+    startTutorialRun:   document.getElementById('startTutorialRun'),
+    nextTutorialStep:   document.getElementById('nextTutorialStep'),
+    backFromTutorial:   document.getElementById('backFromTutorial'),
+    tutorialStepTitle:  document.getElementById('tutorialStepTitle'),
+    tutorialStepText:   document.getElementById('tutorialStepText'),
+    dailyMissionText:   document.getElementById('dailyMissionText'),
+    claimDailyMission:  document.getElementById('claimDailyMission'),
     nightLightBoost:    document.getElementById('nightLightBoost'),
     nightLightBoostVal: document.getElementById('nightLightBoostVal'),
     inGameMsg:          document.getElementById('inGameMsg'),
     shopCoinsDisplay:   document.getElementById('shopCoinsDisplay'),
     shopGrid:           document.getElementById('shopGrid'),
     upgradesGrid:       document.getElementById('upgradesGrid'),
+    cosmeticsGrid:      document.getElementById('cosmeticsGrid'),
+    featuredOffers:     document.getElementById('featuredOffers'),
+    buyCosmeticBox:     document.getElementById('buyCosmeticBox'),
+    shopPreviewText:    document.getElementById('shopPreviewText'),
+    manufacturerMissionText: document.getElementById('manufacturerMissionText'),
+    purchaseHistoryText: document.getElementById('purchaseHistoryText'),
     goTitle:            document.getElementById('goTitle'),
     goScore:            document.getElementById('goScore'),
     goCoins:            document.getElementById('goCoins'),
@@ -209,7 +350,7 @@
 
   const { overlayMenu, overlayShop, overlayGameOver,
           scoreEl, hpEl, speedEl, coinsEl,
-          volMaster, volEngine, volSfx, mouseSensitivity } = elements;
+          volMaster, volEngine, volSfx } = elements;
 
   function inGameMessage(text, ms=2000){
     if(!elements.inGameMsg) return;
@@ -284,6 +425,83 @@
     
     // Sonido especial para combo
     playPowerupSfx();
+  }
+
+
+  const TUTORIAL_STEPS = [
+    { id:'drift', title:'Paso 1: Drift', text:'Pulsa Shift mientras giras para derrapar y controlar la curva.' },
+    { id:'nitro', title:'Paso 2: Nitro', text:'Pulsa N para activar nitro y ganar velocidad en recta.' },
+    { id:'weapon', title:'Paso 3: Arma', text:'Pulsa E o click para disparar y eliminar un zombie.' },
+  ];
+  const tutorialState = { enabled:false, step:0, completed:new Set() };
+
+  function getTodayKey(){ return new Date().toISOString().slice(0,10); }
+  function ensureDailyMission(){
+    const today = getTodayKey();
+    if(playerData.dailyMission && playerData.dailyMission.dayKey===today) return;
+    const pool = [
+      { type:'kill', target:18, reward:90, label:'Elimina 18 zombies' },
+      { type:'coin', target:30, reward:110, label:'Recoge 30 monedas' },
+      { type:'wave', target:3, reward:130, label:'Supera 3 oleadas' },
+    ];
+    const pick = pool[Math.floor(Math.random()*pool.length)];
+    playerData.dailyMission = { dayKey:today, ...pick, progress:0, claimed:false };
+    savePlayerData();
+  }
+
+  function updateDailyMissionUI(){
+    if(!elements.dailyMissionText || !elements.claimDailyMission) return;
+    ensureDailyMission();
+    const m = playerData.dailyMission;
+    const done = m.progress >= m.target;
+    elements.dailyMissionText.textContent = `${m.label} — ${m.progress}/${m.target} · Recompensa: ${m.reward} monedas`;
+    elements.claimDailyMission.disabled = !done || !!m.claimed;
+    elements.claimDailyMission.textContent = m.claimed ? '✅ Reclamada' : 'Reclamar recompensa';
+  }
+
+  function updateDailyMissionProgress(type, amount=1){
+    ensureDailyMission();
+    const m = playerData.dailyMission;
+    if(!m || m.claimed || m.type!==type) return;
+    m.progress = Math.min(m.target, m.progress + amount);
+    if(m.progress >= m.target) inGameMessage('📅 ¡Misión diaria completada! Reclama tu recompensa en menú.', 2200);
+    savePlayerData();
+    updateDailyMissionUI();
+  }
+
+  function claimDailyMission(){
+    const m = playerData.dailyMission;
+    if(!m || m.claimed || m.progress < m.target) return;
+    m.claimed = true;
+    playerData.totalCoins += m.reward;
+    savePlayerData();
+    updateDailyMissionUI();
+    updateMenuStats();
+    inGameMessage(`💰 Recompensa diaria: +${m.reward} monedas`, 2200);
+  }
+
+  function updateTutorialOverlay(){
+    const step = TUTORIAL_STEPS[Math.min(tutorialState.step, TUTORIAL_STEPS.length-1)];
+    if(elements.tutorialStepTitle) elements.tutorialStepTitle.textContent = step.title;
+    if(elements.tutorialStepText) elements.tutorialStepText.textContent = step.text;
+  }
+
+  function markTutorialStep(id){
+    if(!tutorialState.enabled) return;
+    const expected = TUTORIAL_STEPS[tutorialState.step];
+    if(!expected || expected.id!==id) return;
+    tutorialState.completed.add(id);
+    tutorialState.step++;
+    if(tutorialState.step >= TUTORIAL_STEPS.length){
+      tutorialState.enabled = false;
+      playerData.totalCoins += 60;
+      savePlayerData();
+      inGameMessage('🎓 Tutorial completado: +60 monedas', 2400);
+      return;
+    }
+    if(TUTORIAL_STEPS[tutorialState.step].id==='weapon') gameState.hasWeapon = true;
+    updateTutorialOverlay();
+    inGameMessage(`✅ ${expected.title} completado`, 1500);
   }
 
   // ========== CONTROL DE UI ==========
@@ -416,11 +634,11 @@
   volEngine.addEventListener('input', e=>{ elements.volEngineVal.innerText=Math.round(e.target.value*100)+'%'; updateAudioGains(); });
   volSfx.addEventListener('input',   e=>{ elements.volSfxVal.innerText=Math.round(e.target.value*100)+'%';   updateAudioGains(); });
 
-  function updateMouseSensitivityDisplay(){ elements.mouseSensitivityVal.innerText=Math.round(elements.mouseSensitivity.value*100)+'%'; }
   function updateNightLightBoostDisplay(){ if(elements.nightLightBoostVal) elements.nightLightBoostVal.innerText=Math.round(elements.nightLightBoost.value*100)+'%'; }
-  elements.mouseSensitivity.addEventListener('input', e=>{
-    playerData.mouseSensitivity=parseFloat(e.target.value);
-    updateMouseSensitivityDisplay(); savePlayerData();
+  if(elements.steeringMode) elements.steeringMode.addEventListener('change', e=>{
+    playerData.steeringMode = e.target.value;
+    savePlayerData();
+    inGameMessage(`🎮 Modo de giro: ${e.target.selectedOptions[0].textContent}`, 1400);
   });
   if(elements.nightLightBoost) elements.nightLightBoost.addEventListener('input', e=>{
     playerData.nightLightBoost=parseFloat(e.target.value);
@@ -435,6 +653,18 @@
   });
   elements.openSettings.addEventListener('click', ()=>{ elements.settingsPanel.style.display='block'; });
   elements.closeSettings.addEventListener('click', ()=>{ elements.settingsPanel.style.display='none'; });
+  if(elements.claimDailyMission) elements.claimDailyMission.addEventListener('click', claimDailyMission);
+  if(elements.openTutorial) elements.openTutorial.addEventListener('click', ()=>{ overlayMenu.style.display='none'; if(elements.overlayTutorial) elements.overlayTutorial.style.display='block'; updateTutorialOverlay(); });
+  if(elements.backFromTutorial) elements.backFromTutorial.addEventListener('click', ()=>{ if(elements.overlayTutorial) elements.overlayTutorial.style.display='none'; overlayMenu.style.display='block'; updateMenuStats(); });
+  if(elements.nextTutorialStep) elements.nextTutorialStep.addEventListener('click', ()=>{ tutorialState.step = (tutorialState.step + 1) % TUTORIAL_STEPS.length; updateTutorialOverlay(); });
+  if(elements.startTutorialRun) elements.startTutorialRun.addEventListener('click', ()=>{
+    tutorialState.enabled = true; tutorialState.step = 0; tutorialState.completed.clear();
+    if(elements.overlayTutorial) elements.overlayTutorial.style.display='none';
+    startGame();
+    inGameMessage('📘 Tutorial activo: completa los 3 pasos', 2200);
+  });
+
+  if(elements.buyCosmeticBox) elements.buyCosmeticBox.addEventListener('click', openCosmeticBox);
 
   elements.startBtn.addEventListener('click', ()=>{
     try { startGame(); } catch(e){ console.error('❌ Error:', e); alert('Error: '+e.message); }
@@ -460,7 +690,10 @@
   elements.btnRestart.addEventListener('click', ()=>{ resetGame(); gameState.running=true; gameState.paused=false; });
 
   // ========== TIENDA ==========
+
   function renderShop(){
+    ensureShopRotation();
+    ensureManufacturerMission();
     elements.shopGrid.innerHTML='';
     SHOP_COLORS.forEach((color,idx)=>{
       const isOwned=playerData.ownedColors.includes(idx);
@@ -477,6 +710,7 @@
       card.addEventListener('click', ()=> handleColorClick(idx, color, isOwned));
       elements.shopGrid.appendChild(card);
     });
+
     if(elements.upgradesGrid){
       elements.upgradesGrid.innerHTML='';
       Object.entries(playerData.upgrades).forEach(([key,upgrade])=>{
@@ -489,12 +723,90 @@
         elements.upgradesGrid.appendChild(card);
       });
     }
+
+    if(elements.cosmeticsGrid){
+      elements.cosmeticsGrid.innerHTML='';
+      SHOP_COSMETICS.forEach(c=>{
+        const owned = playerData.ownedCosmetics.includes(c.id);
+        const equipped = playerData.equippedCosmetics[c.category]===c.id;
+        const lockedByRep = !canAccessCosmetic(c);
+        const card = document.createElement('div');
+        card.className = `cosmetic-card ${lockedByRep?'premium-locked':''}`;
+        card.innerHTML = `<strong>${c.name}</strong><div class="rarity">${c.rarity} · REP ${c.repRequired||0}</div><div>${owned ? (equipped?'✓ Equipado':'Disponible') : '💰 '+c.price}</div>`;
+
+        const actions = document.createElement('div');
+        actions.className = 'actions';
+
+        const previewBtn = document.createElement('button'); previewBtn.className='btn'; previewBtn.textContent='Comparar';
+        previewBtn.addEventListener('click', ()=> updateShopPreview(c));
+        actions.appendChild(previewBtn);
+
+        const actionBtn = document.createElement('button'); actionBtn.className='btn';
+        if(lockedByRep){ actionBtn.textContent='Bloq. por reputación'; actionBtn.disabled=true; }
+        else if(owned){ actionBtn.textContent = equipped ? 'Equipado' : 'Equipar rápido'; actionBtn.disabled=equipped; actionBtn.addEventListener('click', ()=>{ playerData.equippedCosmetics[c.category]=c.id; savePlayerData(); applyCosmeticStyle(); renderShop(); inGameMessage('🛠️ Cosmético equipado',1200); }); }
+        else { actionBtn.textContent='Comprar'; actionBtn.addEventListener('click', ()=> handleCosmeticPurchase(c)); }
+        actions.appendChild(actionBtn);
+
+        card.appendChild(actions);
+        elements.cosmeticsGrid.appendChild(card);
+      });
+    }
+
+    if(elements.featuredOffers){
+      elements.featuredOffers.innerHTML='';
+      (playerData.shopRotation?.offers || []).forEach(of=>{
+        const item = getCosmeticById(of.id); if(!item) return;
+        const price = Math.floor(item.price * (1 - of.discount));
+        const owned = playerData.ownedCosmetics.includes(item.id);
+        const card = document.createElement('div');
+        card.className = 'cosmetic-card offer-card';
+        card.innerHTML = `<strong>${item.name}</strong><div class="rarity">Oferta diaria -${Math.round(of.discount*100)}%</div><div>${owned?'✓ Ya lo tienes':'💰 '+price}</div>`;
+        const btn = document.createElement('button'); btn.className='btn'; btn.textContent = owned ? 'Ver' : 'Comprar oferta';
+        btn.addEventListener('click', ()=>{ if(!owned) handleCosmeticPurchase(item, price); else updateShopPreview(item); });
+        card.appendChild(btn);
+        elements.featuredOffers.appendChild(card);
+      });
+    }
+
+    updateManufacturerMissionUI();
+    renderPurchaseHistory();
     updateShopCoinsDisplay();
   }
 
+  function handleCosmeticPurchase(item, overridePrice){
+    const price = overridePrice || item.price;
+    if(!canAccessCosmetic(item)){ inGameMessage('Necesitas más reputación para este artículo', 1400); return; }
+    if(playerData.totalCoins < price){ inGameMessage(`Necesitas ${price-playerData.totalCoins} monedas más 💸`); return; }
+    playerData.totalCoins -= price;
+    playerData.ownedCosmetics.push(item.id);
+    playerData.equippedCosmetics[item.category]=item.id;
+    playerData.reputation += item.rarity==='Legendario' ? 2 : 1;
+    addPurchaseHistory(item.name, price);
+    updateManufacturerMissionProgress('buy_cosmetics', 1);
+    savePlayerData();
+    applyCosmeticStyle();
+    renderShop();
+    inGameMessage(`✨ Comprado y equipado: ${item.name}`, 1700);
+  }
+
+  function openCosmeticBox(){
+    const locked = SHOP_COSMETICS.filter(c=> !playerData.ownedCosmetics.includes(c.id) && canAccessCosmetic(c));
+    if(!locked.length){ inGameMessage('Ya tienes todos los cosméticos desbloqueables de tu reputación', 1800); return; }
+    if(playerData.totalCoins < COSMETIC_BOX_PRICE){ inGameMessage(`Necesitas ${COSMETIC_BOX_PRICE-playerData.totalCoins} monedas más 💸`); return; }
+    const item = locked[Math.floor(Math.random()*locked.length)];
+    playerData.totalCoins -= COSMETIC_BOX_PRICE;
+    playerData.ownedCosmetics.push(item.id);
+    playerData.equippedCosmetics[item.category] = item.id;
+    addPurchaseHistory(`Caja: ${item.name}`, COSMETIC_BOX_PRICE);
+    savePlayerData();
+    applyCosmeticStyle();
+    renderShop();
+    inGameMessage(`🎁 Te tocó: ${item.name}`, 2000);
+  }
+
   function handleColorClick(idx, color, isOwned){
-    if(isOwned){ playerData.currentColorIndex=idx; if(car) updateCarColor(idx); savePlayerData(); renderShop(); inGameMessage('¡Color equipado! 🎨'); }
-    else if(playerData.totalCoins>=color.price){ playerData.totalCoins-=color.price; playerData.ownedColors.push(idx); playerData.currentColorIndex=idx; if(car) updateCarColor(idx); savePlayerData(); renderShop(); inGameMessage(`¡Comprado: ${color.name}! 🎉`); }
+    if(isOwned){ playerData.currentColorIndex=idx; if(car) updateCarColor(idx); applyCosmeticStyle(); savePlayerData(); renderShop(); inGameMessage('¡Color equipado! 🎨'); }
+    else if(playerData.totalCoins>=color.price){ playerData.totalCoins-=color.price; playerData.ownedColors.push(idx); playerData.currentColorIndex=idx; if(car) updateCarColor(idx); applyCosmeticStyle(); addPurchaseHistory(color.name, color.price); savePlayerData(); renderShop(); inGameMessage(`¡Comprado: ${color.name}! 🎉`); }
     else inGameMessage(`Necesitas ${color.price-playerData.totalCoins} monedas más 💸`);
   }
 
@@ -511,7 +823,8 @@
     const menuGames = document.getElementById('menuGames');
     if(menuBestScore) menuBestScore.textContent = playerData.bestScore || 0;
     if(menuCoins) menuCoins.textContent = playerData.totalCoins || 0;
-    if(menuGames) menuGames.textContent = playerData.gamesPlayed || 0;
+    if(menuGames) menuGames.textContent = `${playerData.gamesPlayed || 0} · REP ${playerData.reputation||0}`;
+    updateDailyMissionUI();
   }
 
 
@@ -678,6 +991,7 @@
   // ✅ Mini-mapa
   let minimapCanvas = null;
   let minimapCtx = null;
+  let minimapAccumulator = 0;
   
   // ✨ Referencias de iluminación para atmósferas dinámicas
   let ambientLight = null;
@@ -694,9 +1008,9 @@
 
       carState.velocity = new THREE.Vector3();
 
-      renderer = new THREE.WebGLRenderer({ antialias:true, powerPreference:'high-performance' });
+      renderer = new THREE.WebGLRenderer({ antialias:false, powerPreference:'high-performance' });
       renderer.setSize(window.innerWidth, window.innerHeight);
-      renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+      renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.5));
       renderer.shadowMap.enabled = true;
       renderer.shadowMap.type = THREE.PCFSoftShadowMap;
       renderer.toneMapping = THREE.ACESFilmicToneMapping;
@@ -717,7 +1031,7 @@
       sun = new THREE.DirectionalLight(0xffe8cc, 2.0);
       sun.position.set(100, 80, 60);
       sun.castShadow = true;
-      sun.shadow.mapSize.set(2048, 2048);
+      sun.shadow.mapSize.set(1024, 1024);
       sun.shadow.camera.left=-60; sun.shadow.camera.right=60;
       sun.shadow.camera.top=60; sun.shadow.camera.bottom=-60;
       sun.shadow.camera.near=0.1; sun.shadow.camera.far=300;
@@ -737,7 +1051,7 @@
       try {
         composer = new THREE.EffectComposer(renderer);
         composer.addPass(new THREE.RenderPass(scene, camera));
-        composer.addPass(new THREE.UnrealBloomPass(new THREE.Vector2(window.innerWidth, window.innerHeight), 0.7, 0.4, 0.85));
+        composer.addPass(new THREE.UnrealBloomPass(new THREE.Vector2(window.innerWidth, window.innerHeight), 0.45, 0.35, 0.9));
       } catch(e){ console.warn('⚠️ Post-processing no disponible'); }
 
       // CONSTRUIR MUNDO
@@ -1159,10 +1473,26 @@
     
     // ✨ AURA DE POWER-UP - Mejora visual espectacular
     createCarAura();
+
+    const spoilerMat = new THREE.MeshStandardMaterial({ color:0x202020, roughness:0.45, metalness:0.7 });
+    carSpoiler = new THREE.Mesh(new THREE.BoxGeometry(1.7, 0.12, 0.45), spoilerMat);
+    carSpoiler.position.set(0, 1.12, -1.35);
+    carSpoiler.castShadow = true;
+    car.add(carSpoiler);
+
+    const neonMat = new THREE.MeshBasicMaterial({ color:0x00ff88, transparent:true, opacity:0.55 });
+    carNeon = new THREE.Mesh(new THREE.TorusGeometry(1.45, 0.06, 12, 28), neonMat);
+    carNeon.rotation.x = Math.PI/2;
+    carNeon.position.y = 0.22;
+    car.add(carNeon);
+
+    applyCosmeticStyle();
   }
 
   // ========== AURA VISUAL DEL COCHE ==========
   let carAura = null;
+  let carSpoiler = null;
+  let carNeon = null;
   
   function createCarAura(){
     if(carAura) return;
@@ -1236,13 +1566,38 @@
     }
   }
 
+
+  function getWaveConfig(wave){
+    if(wave<=2) return { spawnDelay:2600, maxZombies:4+wave, zombieSpeedMult:0.78+wave*0.08, killTarget:16, coinChance:0.0035, weights:{normal:0.66, fast:0.2, tank:0.1, explosive:0.04} };
+    if(wave<=5) return { spawnDelay:1800, maxZombies:8+wave, zombieSpeedMult:0.95+wave*0.04, killTarget:20, coinChance:0.004, weights:{normal:0.5, fast:0.28, tank:0.14, explosive:0.08} };
+    if(wave<=10) return { spawnDelay:Math.max(900, 1500-wave*55), maxZombies:12+Math.floor(wave*1.4), zombieSpeedMult:1.08+(wave-5)*0.07, killTarget:24, coinChance:0.0045, weights:{normal:0.42, fast:0.3, tank:0.18, explosive:0.1} };
+    return { spawnDelay:Math.max(550, 1000-wave*20), maxZombies:Math.min(36, 20+Math.floor(wave*1.5)), zombieSpeedMult:1.45+(wave-10)*0.05, killTarget:28, coinChance:0.0048, weights:{normal:0.35, fast:0.32, tank:0.2, explosive:0.13} };
+  }
+
+  function maybeStartWaveEvent(){
+    if(gameState.wave < 3 || gameState.waveEvent) return;
+    if(gameState.eventRollWave === gameState.wave) return;
+    gameState.eventRollWave = gameState.wave;
+    if(Math.random() > 0.45) return;
+    const roll = Math.random();
+    if(roll < 0.34){
+      gameState.waveEvent = { type:'fast_horde', title:'⚡ Evento: Horda rápida', until: gameState.zombiesKilledThisWave + 10 };
+    } else if(roll < 0.67){
+      gameState.waveEvent = { type:'tank_assault', title:'🛡️ Evento: Asalto tanque', until: gameState.zombiesKilledThisWave + 8 };
+    } else {
+      gameState.waveEvent = { type:'coin_rush', title:'💰 Evento: Lluvia de monedas', until: gameState.zombiesKilledThisWave + 12 };
+    }
+    inGameMessage(gameState.waveEvent.title, 2000);
+  }
+
   // ========== SPAWN ZOMBIES / POWERUPS ==========
-  function spawnZombie(){
+  function spawnZombie(weights){
+    const w = weights || {normal:0.5, fast:0.25, tank:0.15, explosive:0.1};
     const rand = Math.random();
     let type;
-    if(rand<0.5) type=ZOMBIE_TYPES.NORMAL;
-    else if(rand<0.75) type=ZOMBIE_TYPES.FAST;
-    else if(rand<0.9) type=ZOMBIE_TYPES.TANK;
+    if(rand<w.normal) type=ZOMBIE_TYPES.NORMAL;
+    else if(rand<w.normal + w.fast) type=ZOMBIE_TYPES.FAST;
+    else if(rand<w.normal + w.fast + w.tank) type=ZOMBIE_TYPES.TANK;
     else type=ZOMBIE_TYPES.EXPLOSIVE;
 
     const zombie = new THREE.Group();
@@ -1748,6 +2103,7 @@
     }
 
     updateMissionHud();
+    updateDailyMissionProgress(type, amount);
   }
 
   // ========== CONTROLES ==========
@@ -1800,6 +2156,7 @@
     lastShotTime = now;
 
     playShootSfx();
+    markTutorialStep('weapon');
 
     const bullet = new THREE.Group();
     const coreMat = new THREE.MeshStandardMaterial({ color:0xfff08a, emissive:0xffdd55, emissiveIntensity:1.2 });
@@ -1828,6 +2185,13 @@
     spawnDust(bullet.position.clone(), 3);
   }
 
+  function getSteeringProfile(){
+    const mode = playerData.steeringMode || 'normal';
+    if(mode==='soft') return { mouseFactor:0.7, response:7.2, steerBase:Math.PI/5.8, highSpeedStability:0.58 };
+    if(mode==='direct') return { mouseFactor:0.92, response:12, steerBase:Math.PI/5.2, highSpeedStability:0.48 };
+    return { mouseFactor:0.82, response:10, steerBase:Math.PI/5.5, highSpeedStability:0.52 };
+  }
+
   // ========== FÍSICA DEL COCHE (mejorada con drifting real) ==========
   function updateCarPhysics(dt){
     if(!car || !carState.velocity || gameState.paused) return;
@@ -1841,20 +2205,21 @@
     const nitro    = keys['n'] && carState.nitro>0;
 
     // --- Entrada de dirección ---
+    const steerProfile = getSteeringProfile();
     let steerInput = 0;
     if(left)  steerInput += 1;
     if(right) steerInput -= 1;
-    if(mouseActive && Math.abs(mouseX)>0.05) steerInput += mouseX * playerData.mouseSensitivity;
+    if(mouseActive && Math.abs(mouseX)>0.05) steerInput += mouseX * steerProfile.mouseFactor;
     steerInput = clamp(steerInput, -1, 1);
 
     // Ángulo máximo de las ruedas (se reduce a alta velocidad para estabilidad)
     const speed = carState.velocity.length();
     const speedNorm = clamp(speed / CONFIG.MAX_SPEED, 0, 1);
-    const maxSteer = Math.PI/6 * (1 - speedNorm*0.45); // se reduce hasta 55% a máx velocidad
+    const maxSteer = steerProfile.steerBase * (1 - speedNorm*steerProfile.highSpeedStability); // configurable por modo
 
     carState.targetWheelAngle = steerInput * maxSteer;
     // Suavizar giro de ruedas
-    carState.wheelAngle = lerp(carState.wheelAngle, carState.targetWheelAngle, dt*8);
+    carState.wheelAngle = lerp(carState.wheelAngle, carState.targetWheelAngle, dt*steerProfile.response);
 
     // --- Aceleración / frenado ---
     let accel = CONFIG.ACCELERATION;
@@ -1869,6 +2234,7 @@
     }
 
     document.body.classList.toggle('nitro-active', nitro || gameState.hasTurbo);
+    if(nitro) markTutorialStep('nitro');
 
     // Vector de dirección del coche
     const carDir = new THREE.Vector3(0,0,-1).applyQuaternion(car.quaternion);
@@ -1889,17 +2255,18 @@
 
     // Calcular drift
     const isDrifting = handbrake || (lateralSpeed > 0.05 && speed > 0.08);
+    if(isDrifting) markTutorialStep('drift');
     carState.driftAmount = lerp(carState.driftAmount, isDrifting ? 1 : 0, dt*6);
 
     // Fricción lateral (más fricción = menos drift)
     let latFric = CONFIG.LATERAL_FRICTION;
-    if(handbrake) latFric = 0.72;   // freno de mano: menos fricción lateral = drift
-    else if(brake) latFric = 0.80;
+    if(handbrake) latFric = 0.78;   // freno de mano: sigue derrapando, pero más controlable
+    else if(brake) latFric = 0.86;
 
     // Fricción frontal normal
     let frontFric = CONFIG.FRICTION;
-    if(brake) frontFric = 0.92;
-    if(handbrake) frontFric = 0.88;
+    if(brake) frontFric = 0.94;
+    if(handbrake) frontFric = 0.9;
 
     // Aplicar fricción separada
     const velFrontFriced = velForward.multiplyScalar(Math.pow(frontFric, dt*60));
@@ -1912,7 +2279,7 @@
     }
 
     // --- Giro (yaw) basado en ángulo de ruedas y velocidad ---
-    const turnRate = (carState.wheelAngle / (Math.PI/6)) * CONFIG.TURN_SPEED;
+    const turnRate = (carState.wheelAngle / steerProfile.steerBase) * CONFIG.TURN_SPEED;
     if(speed > 0.015){
       // El giro es proporcional a la velocidad frontal
       const turnSign = velDot >= 0 ? 1 : -1;
@@ -1924,7 +2291,7 @@
 
     // --- Inclinación visual del coche ---
     // Roll en curvas (inclinación lateral)
-    const targetRoll = -steerInput * 0.18 * speedNorm;
+    const targetRoll = -steerInput * 0.14 * speedNorm;
     car.rotation.z = lerp(car.rotation.z, targetRoll, dt*7);
 
     // Pitch al acelerar/frenar
@@ -2412,31 +2779,40 @@
     dustGeom.attributes.aLifetime.needsUpdate=true;
 
     if(gameState.running && !gameState.paused){
-      // --- DIFICULTAD PROGRESIVA ---
-      const wave=gameState.wave;
-      let spawnDelay, maxZombies, zombieSpeedMult;
+      // --- DIFICULTAD PROGRESIVA + EVENTOS DE OLEADA ---
+      gameState.waveConfig = getWaveConfig(gameState.wave);
+      const cfg = gameState.waveConfig;
+      maybeStartWaveEvent();
 
-      if(wave===1){       spawnDelay=3000; maxZombies=3;  zombieSpeedMult=0.7; }
-      else if(wave===2){  spawnDelay=2500; maxZombies=5;  zombieSpeedMult=0.8; }
-      else if(wave===3){  spawnDelay=2000; maxZombies=7;  zombieSpeedMult=0.9; }
-      else if(wave<=5){   spawnDelay=1600; maxZombies=8+(wave-3)*2; zombieSpeedMult=1.0; }
-      else if(wave<=10){  spawnDelay=Math.max(800,1400-(wave-5)*100); maxZombies=12+(wave-5)*1.5; zombieSpeedMult=1.0+(wave-5)*0.08; }
-      else {              spawnDelay=Math.max(500,800-(wave-10)*30);  maxZombies=Math.min(35,18+(wave-10)*1.2); zombieSpeedMult=1.4+(wave-10)*0.05; }
+      let waveWeights = { ...cfg.weights };
+      let coinChance = cfg.coinChance;
+      if(gameState.waveEvent){
+        if(gameState.waveEvent.type==='fast_horde'){ waveWeights = {normal:0.2, fast:0.62, tank:0.1, explosive:0.08}; }
+        if(gameState.waveEvent.type==='tank_assault'){ waveWeights = {normal:0.2, fast:0.16, tank:0.5, explosive:0.14}; }
+        if(gameState.waveEvent.type==='coin_rush') coinChance = 0.008;
+        if(gameState.zombiesKilledThisWave >= gameState.waveEvent.until){
+          gameState.waveEvent = null;
+          inGameMessage('✅ Evento finalizado', 1200);
+        }
+      }
 
-      if(now-gameState.lastSpawn>spawnDelay){
-        if(zombies.length<maxZombies) spawnZombie();
+      if(now-gameState.lastSpawn>cfg.spawnDelay){
+        if(zombies.length<cfg.maxZombies){
+          spawnZombie(waveWeights);
+          if(gameState.waveEvent && gameState.waveEvent.type==='fast_horde' && Math.random()<0.35 && zombies.length<cfg.maxZombies) spawnZombie(waveWeights);
+        }
         gameState.lastSpawn=now;
       }
 
       // Power-ups
       if(Math.random()<0.0009 && powerups.length<3) spawnPowerup();
-      
-      // 💰 Monedas - spawn frecuente
-      if(Math.random()<0.004 && coins.length<15) spawnCoin();
+
+      // 💰 Monedas
+      if(Math.random()<coinChance && coins.length<18) spawnCoin();
 
       // Updates
       updateCarPhysics(dt);
-      checkZombies(dt, zombieSpeedMult);
+      checkZombies(dt, cfg.zombieSpeedMult);
       checkPowerups(dt);
       updateCoins(dt); // 💰 Actualizar monedas
       updateBullets(dt);
@@ -2468,8 +2844,12 @@
       }
 
       // Oleadas con cambio de atmósfera
-      if(gameState.zombiesKilledThisWave>=20){
+      if(gameState.zombiesKilledThisWave>=gameState.waveConfig.killTarget){
         gameState.wave++;
+        updateDailyMissionProgress('wave', 1);
+        if(playerData.manufacturerMission && playerData.manufacturerMission.type==='wave_with_color' && playerData.currentColorIndex===playerData.manufacturerMission.colorIndex){
+          updateManufacturerMissionProgress('wave_with_color', 1);
+        }
         gameState.zombiesKilledThisWave=0;
         
         // ✨ Cambiar atmósfera cada oleada
@@ -2541,8 +2921,12 @@
     if(elements.nitroBar) elements.nitroBar.style.width=(carState.nitro/carState.maxNitro*100)+'%';
     coinsEl.textContent = playerData.totalCoins + Math.floor(gameState.score/100);
 
-    // ✅ Dibujar mini-mapa cada frame
-    drawMinimap();
+    // ✅ Dibujar mini-mapa con límite para reducir carga de CPU
+    minimapAccumulator += dt;
+    if(minimapAccumulator >= 1/30){
+      drawMinimap();
+      minimapAccumulator = 0;
+    }
 
     // Render
     try { if(composer) composer.render(dt); else renderer.render(scene,camera); }
@@ -2560,6 +2944,9 @@
     gameState.score=0; gameState.hp=gameState.maxHp;
     gameState.combo=0; gameState.comboTimer=0; gameState.maxCombo=0;
     gameState.kills=0; gameState.wave=1; gameState.zombiesKilledThisWave=0;
+    gameState.waveConfig = getWaveConfig(1);
+    gameState.waveEvent = null;
+    gameState.eventRollWave = 0;
     gameState.lastSpawn=performance.now();
     gameState.powerups.clear();
     gameState.hasShield=false; gameState.hasTurbo=false; gameState.hasMagnet=false; gameState.hasWeapon=false;
@@ -2567,6 +2954,7 @@
 
     Object.keys(keys).forEach(k=> keys[k]=false);
     mouseActive=false;
+    tutorialState.enabled = false;
     camShake.intensity=0; camShake.decay=0;
     const comboMsg = document.getElementById('bigComboMessage'); if(comboMsg) comboMsg.remove();
     lastBigMessageCombo = 0;
@@ -2595,10 +2983,13 @@
   }
 
   function startGame(){
+    const tutorialWasRequested = tutorialState.enabled;
     if(!scene||!car){ alert('Error: Escena no inicializada. Recarga la página.'); return; }
     if(gameState.running) return;
     showHUD();
     resetGame();
+    if(tutorialWasRequested){ tutorialState.enabled = true; tutorialState.step = 0; updateTutorialOverlay(); }
+    applyCosmeticStyle();
     gameState.running=true; gameState.paused=false;
     overlayMenu.style.display='none'; overlayShop.style.display='none'; overlayGameOver.style.display='none';
     hideBackgroundCanvas();
