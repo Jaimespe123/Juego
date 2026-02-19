@@ -1891,12 +1891,15 @@
   });
   window.addEventListener('keyup', e=>{ keys[e.key.toLowerCase()]=false; });
 
+  let lastMouseClientX = window.innerWidth/2;
   window.addEventListener('mousemove', e=>{
     if(gameState.running && !gameState.paused){
-      mouseX=(e.clientX/window.innerWidth)*2-1;
+      const delta = (e.clientX - lastMouseClientX) / window.innerWidth * 4;
+      mouseX = Math.max(-1, Math.min(1, mouseX + delta));
       mouseY=(e.clientY/window.innerHeight)*2-1;
       mouseActive=true;
     }
+    lastMouseClientX = e.clientX;
   });
 
   window.addEventListener('click', ()=>{
@@ -1977,11 +1980,19 @@
 
     // --- Entrada de dirección ---
     const steerProfile = getSteeringProfile();
+
+    // Decaimiento del mouseX: si el ratón no se mueve vuelve a 0 suavemente
+    mouseX = mouseX * 0.88;
+    if(Math.abs(mouseX) < 0.01) mouseX = 0;
+
     let steerInput = 0;
+    const keyboardSteering = left || right;
     if(left)  steerInput += 1;
     if(right) steerInput -= 1;
-    // Mouse: una sola vez (sin duplicar)
-    if(mouseActive && Math.abs(mouseX)>0.05) steerInput += mouseX * steerProfile.mouseFactor;
+    // El ratón solo actúa si no hay tecla de dirección pulsada
+    if(mouseActive && !keyboardSteering && Math.abs(mouseX) > 0.03){
+      steerInput += mouseX * steerProfile.mouseFactor;
+    }
     steerInput = clamp(steerInput, -1, 1);
 
     // Ángulo máximo de las ruedas (se reduce a alta velocidad para estabilidad)
@@ -2778,6 +2789,7 @@
     updateAudioGains();
     gameState.lastTime=performance.now();
     mouseActive=false;
+    mouseX=0;
     playerData.gamesPlayed++; savePlayerData();
   }
 
