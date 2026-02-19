@@ -1001,6 +1001,7 @@ kbd {
   .powerup-name { font-size: 9px; }
 
   .leaderboard-summary { grid-template-columns: 1fr; }
+  .leaderboard-achievements { grid-template-columns: 1fr; }
 
   #topRight {
     right: var(--spacing-sm);
@@ -1152,6 +1153,39 @@ kbd {
   color: var(--accent);
   font-size: 16px;
   font-weight: 800;
+}
+
+.leaderboard-controls {
+  display: flex;
+  gap: 8px;
+  justify-content: center;
+  margin: 8px 0 12px;
+  flex-wrap: wrap;
+}
+
+.leaderboard-controls .btn.active {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 1px rgba(29,185,84,0.5);
+}
+
+.leaderboard-achievements {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.leaderboard-achievement {
+  background: rgba(255,255,255,0.04);
+  border: 1px solid rgba(255,255,255,0.1);
+  border-radius: 8px;
+  padding: 8px;
+  font-size: 12px;
+}
+
+.leaderboard-achievement.unlocked {
+  border-color: rgba(255, 221, 0, 0.7);
+  background: rgba(255, 221, 0, 0.08);
 }
 /* ========== LEADERBOARD ========== */
 .leaderboard-entry {

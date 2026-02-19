@@ -362,6 +362,14 @@
 
       <div id="leaderboardSummary" class="leaderboard-summary"></div>
 
+      <div class="leaderboard-controls">
+        <button class="btn" id="sortByScore">Score</button>
+        <button class="btn" id="sortByKills">Kills</button>
+        <button class="btn" id="sortByWave">Oleada</button>
+      </div>
+
+      <div id="leaderboardAchievements" class="leaderboard-achievements"></div>
+
       <div id="leaderboardContent" style="min-height: 260px;">
         <!-- Las entradas se generan dinámicamente -->
       </div>
@@ -474,6 +482,23 @@
             aria-valuemin="10"
             aria-valuemax="200"
             aria-valuenow="100">
+        </div>
+
+        <div class="setting">
+          <label for="nightLightBoost">
+            🌙 Intensidad farolas
+            <span id="nightLightBoostVal" class="setting-value">120%</span>
+          </label>
+          <input
+            id="nightLightBoost"
+            type="range"
+            min="0.8"
+            max="2"
+            step="0.1"
+            value="1.2"
+            aria-valuemin="80"
+            aria-valuemax="200"
+            aria-valuenow="120">
         </div>
       </div>
       

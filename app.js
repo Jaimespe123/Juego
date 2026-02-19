@@ -69,6 +69,12 @@
   };
 
   const STORAGE_KEY = 'carVsZombies_playerData';
+  const ACHIEVEMENTS = [
+    { id:'score_1000', label:'🔥 Rompe-Records', desc:'Alcanza 1000 puntos en una partida', check:(run)=>run.score>=1000 },
+    { id:'kills_200', label:'🧟 Cazador', desc:'Acumula 200 kills totales', check:(_,data)=> (data.totalKills||0)>=200 },
+    { id:'wave_8', label:'🌊 Superviviente', desc:'Llega a la oleada 8', check:(run)=>run.wave>=8 },
+    { id:'games_20', label:'🎮 Veterano', desc:'Juega 20 partidas', check:(_,data)=> (data.gamesPlayed||0)>=20 },
+  ];
 
   // ========== ESTADO DEL JUEGO ==========
   const gameState = {
@@ -100,6 +106,9 @@
     totalCoins:0, ownedColors:[0], currentColorIndex:0,
     mouseSensitivity:1, bestScore:0, totalKills:0, gamesPlayed:0,
     leaderboard: [],
+    leaderboardSort: 'score',
+    achievements: [],
+    nightLightBoost: 1.2,
     upgrades: JSON.parse(JSON.stringify(SHOP_UPGRADES)),
   };
 
@@ -112,10 +121,17 @@
         playerData = { ...playerData, ...loaded };
         if(!playerData.upgrades) playerData.upgrades = JSON.parse(JSON.stringify(SHOP_UPGRADES));
         if(!Array.isArray(playerData.leaderboard)) playerData.leaderboard = [];
+        if(!Array.isArray(playerData.achievements)) playerData.achievements = [];
+        if(!playerData.leaderboardSort) playerData.leaderboardSort = 'score';
+        if(typeof playerData.nightLightBoost !== 'number') playerData.nightLightBoost = 1.2;
       }
       if(elements.mouseSensitivity) {
         elements.mouseSensitivity.value = playerData.mouseSensitivity || 1;
         updateMouseSensitivityDisplay();
+      }
+      if(elements.nightLightBoost) {
+        elements.nightLightBoost.value = playerData.nightLightBoost || 1.2;
+        updateNightLightBoostDisplay();
       }
       applyUpgrades();
     } catch(e){ console.warn('Error cargando datos:', e); }
@@ -170,6 +186,8 @@
     volSfxVal:          document.getElementById('volSfxVal'),
     mouseSensitivity:   document.getElementById('mouseSensitivity'),
     mouseSensitivityVal:document.getElementById('mouseSensitivityVal'),
+    nightLightBoost:    document.getElementById('nightLightBoost'),
+    nightLightBoostVal: document.getElementById('nightLightBoostVal'),
     inGameMsg:          document.getElementById('inGameMsg'),
     shopCoinsDisplay:   document.getElementById('shopCoinsDisplay'),
     shopGrid:           document.getElementById('shopGrid'),
@@ -182,7 +200,11 @@
     powerupContainer:   document.getElementById('powerupContainer'),
     leaderboardContent:  document.getElementById('leaderboardContent'),
     leaderboardSummary:  document.getElementById('leaderboardSummary'),
+    leaderboardAchievements: document.getElementById('leaderboardAchievements'),
     clearLeaderboard:    document.getElementById('clearLeaderboard'),
+    sortByScore:        document.getElementById('sortByScore'),
+    sortByKills:        document.getElementById('sortByKills'),
+    sortByWave:         document.getElementById('sortByWave'),
   };
 
   const { overlayMenu, overlayShop, overlayGameOver,
@@ -395,9 +417,16 @@
   volSfx.addEventListener('input',   e=>{ elements.volSfxVal.innerText=Math.round(e.target.value*100)+'%';   updateAudioGains(); });
 
   function updateMouseSensitivityDisplay(){ elements.mouseSensitivityVal.innerText=Math.round(elements.mouseSensitivity.value*100)+'%'; }
+  function updateNightLightBoostDisplay(){ if(elements.nightLightBoostVal) elements.nightLightBoostVal.innerText=Math.round(elements.nightLightBoost.value*100)+'%'; }
   elements.mouseSensitivity.addEventListener('input', e=>{
     playerData.mouseSensitivity=parseFloat(e.target.value);
     updateMouseSensitivityDisplay(); savePlayerData();
+  });
+  if(elements.nightLightBoost) elements.nightLightBoost.addEventListener('input', e=>{
+    playerData.nightLightBoost=parseFloat(e.target.value);
+    updateNightLightBoostDisplay();
+    updateLampAtmosphere();
+    savePlayerData();
   });
 
   // ========== EVENTOS UI ==========
@@ -489,10 +518,15 @@
   function renderLeaderboard(){
     if(!elements.leaderboardContent) return;
 
+    const sortKey = playerData.leaderboardSort || 'score';
     const records = (playerData.leaderboard || [])
       .slice()
-      .sort((a,b)=> (b.score||0) - (a.score||0))
+      .sort((a,b)=> (b[sortKey]||0) - (a[sortKey]||0) || (b.score||0)-(a.score||0))
       .slice(0,10);
+
+    if(elements.sortByScore) elements.sortByScore.classList.toggle('active', sortKey==='score');
+    if(elements.sortByKills) elements.sortByKills.classList.toggle('active', sortKey==='kills');
+    if(elements.sortByWave) elements.sortByWave.classList.toggle('active', sortKey==='wave');
 
     if(elements.leaderboardSummary){
       const totalGames = playerData.gamesPlayed || records.length;
@@ -503,6 +537,16 @@
         <div class="card"><div class="label">Score promedio</div><div class="value">${avgScore}</div></div>
         <div class="card"><div class="label">Mejor oleada</div><div class="value">${bestWave}</div></div>
       `;
+    }
+
+    if(elements.leaderboardAchievements){
+      elements.leaderboardAchievements.innerHTML = ACHIEVEMENTS.map(a=>{
+        const unlocked = (playerData.achievements||[]).includes(a.id);
+        return `<div class="leaderboard-achievement ${unlocked ? 'unlocked' : ''}">
+          <strong>${a.label}</strong><br>
+          <span>${a.desc}</span>
+        </div>`;
+      }).join('');
     }
 
     if(records.length===0){
@@ -527,6 +571,19 @@
     }).join('');
   }
 
+  function checkAchievements(run){
+    const unlocked = [];
+    const owned = new Set(playerData.achievements || []);
+    ACHIEVEMENTS.forEach(ach=>{
+      if(!owned.has(ach.id) && ach.check(run, playerData)){
+        owned.add(ach.id);
+        unlocked.push(ach.label);
+      }
+    });
+    playerData.achievements = Array.from(owned);
+    if(unlocked.length) inGameMessage(`🏅 Logro desbloqueado: ${unlocked[0]}`, 2200);
+  }
+
   function saveRunToLeaderboard(){
     const record = {
       score: Math.floor(gameState.score),
@@ -541,6 +598,7 @@
     playerData.leaderboard.push(record);
     playerData.leaderboard.sort((a,b)=> (b.score||0) - (a.score||0));
     playerData.leaderboard = playerData.leaderboard.slice(0,50);
+    checkAchievements(record);
   }
 
 
@@ -581,6 +639,9 @@
     renderLeaderboard();
     inGameMessage('🧹 Récords limpiados', 1200);
   });
+  if(elements.sortByScore) elements.sortByScore.addEventListener('click', ()=>{ playerData.leaderboardSort='score'; savePlayerData(); renderLeaderboard(); });
+  if(elements.sortByKills) elements.sortByKills.addEventListener('click', ()=>{ playerData.leaderboardSort='kills'; savePlayerData(); renderLeaderboard(); });
+  if(elements.sortByWave) elements.sortByWave.addEventListener('click', ()=>{ playerData.leaderboardSort='wave'; savePlayerData(); renderLeaderboard(); });
 
   loadPlayerData();
   updateMenuStats();
@@ -1325,7 +1386,8 @@
 
     lampLights = lampLights.filter(l => l && l.parent);
     lampLights.forEach(light => {
-      const boost = isNight ? 3.4 : (isFog ? 1.8 : 0.7);
+      const userBoost = clamp(playerData.nightLightBoost || 1.2, 0.8, 2);
+      const boost = (isNight ? 3.4 : (isFog ? 1.8 : 0.7)) * userBoost;
       light.intensity = (light.userData.baseIntensity || 0.55) * boost;
       light.distance = (light.userData.baseDistance || 24) * (isNight ? 1.6 : 1.0);
       light.color.setHex(isNight ? 0xfff2c2 : 0xffeeaa);
