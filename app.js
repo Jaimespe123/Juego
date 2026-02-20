@@ -26,6 +26,9 @@
     TREE_ROWS: 3,               // filas de árboles por lado
     TREE_SPACING: 12,
     LAMP_SPACING: 25,
+    LAMP_LIGHT_EVERY: 2,
+    BUILDING_SPACING: 70,
+    ROCKS_PER_CHUNK: 12,
   };
 
   // ========== TIPOS DE ZOMBIES ==========
@@ -260,6 +263,7 @@
     inGameMsg:          document.getElementById('inGameMsg'),
     shopCoinsDisplay:   document.getElementById('shopCoinsDisplay'),
     shopGrid:           document.getElementById('shopGrid'),
+    shopInsights:       document.getElementById('shopInsights'),
     upgradesGrid:       document.getElementById('upgradesGrid'),
     goTitle:            document.getElementById('goTitle'),
     goScore:            document.getElementById('goScore'),
@@ -622,14 +626,44 @@
   // ========== TIENDA ==========
   function renderShop(){
     elements.shopGrid.innerHTML='';
+
+    const ownedColorsCount = playerData.ownedColors.length;
+    const totalColorsCount = SHOP_COLORS.length;
+    const nextColor = SHOP_COLORS
+      .filter((_, idx)=> !playerData.ownedColors.includes(idx))
+      .sort((a,b)=>a.price-b.price)[0];
+
+    if(elements.shopInsights){
+      const affordableUpgrades = Object.values(playerData.upgrades).filter(up=>{
+        const cost = Math.floor(up.baseCost*Math.pow(1.5, up.level));
+        return up.level < up.maxLevel && playerData.totalCoins >= cost;
+      }).length;
+      elements.shopInsights.innerHTML = `
+        <div class="insight-card">
+          <span class="insight-label">Colores desbloqueados</span>
+          <strong>${ownedColorsCount}/${totalColorsCount}</strong>
+        </div>
+        <div class="insight-card">
+          <span class="insight-label">Próximo color</span>
+          <strong>${nextColor ? `💰 ${nextColor.price}` : 'Completado ✅'}</strong>
+        </div>
+        <div class="insight-card">
+          <span class="insight-label">Mejoras comprables</span>
+          <strong>${affordableUpgrades}</strong>
+        </div>
+      `;
+    }
+
     SHOP_COLORS.forEach((color,idx)=>{
       const isOwned=playerData.ownedColors.includes(idx);
       const isCurrent=playerData.currentColorIndex===idx;
+      const isAffordable=!isOwned && playerData.totalCoins>=color.price;
       const card=document.createElement('div');
       card.className='color-card';
       card.style.backgroundColor='#'+color.hex.toString(16).padStart(6,'0');
       if(isCurrent) card.classList.add('current');
       if(isOwned) card.classList.add('owned');
+      if(isAffordable) card.classList.add('affordable');
       const nameDiv=document.createElement('div'); nameDiv.className='color-name'; nameDiv.textContent=color.name;
       const priceDiv=document.createElement('div'); priceDiv.className='color-price';
       priceDiv.textContent = isOwned ? (isCurrent?'✓ Equipado':'✓ Tuyo') : `💰 ${color.price}`;
@@ -637,13 +671,16 @@
       card.addEventListener('click', ()=> handleColorClick(idx, color, isOwned));
       elements.shopGrid.appendChild(card);
     });
+
     if(elements.upgradesGrid){
       elements.upgradesGrid.innerHTML='';
       Object.entries(playerData.upgrades).forEach(([key,upgrade])=>{
         const card=document.createElement('div'); card.className='upgrade-card';
-        const cost=upgrade.baseCost*Math.pow(1.5,upgrade.level);
+        const cost=Math.floor(upgrade.baseCost*Math.pow(1.5,upgrade.level));
         const isMaxed=upgrade.level>=upgrade.maxLevel;
-        card.innerHTML=`<div class="upgrade-name">${upgrade.name}</div><div class="upgrade-level">Nivel ${upgrade.level}/${upgrade.maxLevel}</div><div class="upgrade-price">${isMaxed?'✓ MÁXIMO':'💰 '+Math.floor(cost)}</div>`;
+        const canBuy=!isMaxed && playerData.totalCoins>=cost;
+        if(canBuy) card.classList.add('can-buy');
+        card.innerHTML=`<div class="upgrade-name">${upgrade.name}</div><div class="upgrade-level">Nivel ${upgrade.level}/${upgrade.maxLevel}</div><div class="upgrade-price">${isMaxed?'✓ MÁXIMO':'💰 '+cost}</div>`;
         if(!isMaxed){ card.style.cursor='pointer'; card.addEventListener('click',()=>handleUpgradeClick(key,upgrade,cost)); }
         else card.classList.add('maxed');
         elements.upgradesGrid.appendChild(card);
@@ -930,6 +967,9 @@
   // ========== MUNDO INFINITO ==========
   // Materiales compartidos (se crean una vez)
   let matRoad, matSide, matLine, matGround, matTree, matTrunk, matLampPost, matLampLight, matBuilding, matRock, matBillboard;
+  let treeCanopyMats = [];
+  let geomTreeTrunk, geomTreeConeLarge, geomTreeConeSmall, geomLampPost, geomLampArm, geomLampBulb, geomWindow;
+  let chunkCounter = 0;
 
   function initWorldMaterials(){
     // Carretera asfalto oscuro
@@ -951,6 +991,23 @@
     // Rocas / carteles
     matRock = new THREE.MeshStandardMaterial({ color:0x4a4d52, roughness:0.95, metalness:0.05 });
     matBillboard = new THREE.MeshStandardMaterial({ color:0x1f2730, roughness:0.75, metalness:0.2 });
+
+    // Variantes pre-generadas para evitar clonar materiales continuamente
+    treeCanopyMats = [
+      new THREE.MeshStandardMaterial({ color:0x2e7a2e, roughness:0.9 }),
+      new THREE.MeshStandardMaterial({ color:0x2f6f2f, roughness:0.9 }),
+      new THREE.MeshStandardMaterial({ color:0x356f2b, roughness:0.9 }),
+      new THREE.MeshStandardMaterial({ color:0x3f7f33, roughness:0.9 })
+    ];
+
+    // Geometrías compartidas para reducir picos de CPU/GPU al entrar en nuevos chunks
+    geomTreeTrunk = new THREE.CylinderGeometry(0.15, 0.25, 1.2, 6);
+    geomTreeConeLarge = new THREE.ConeGeometry(1.1, 2.2, 7);
+    geomTreeConeSmall = new THREE.ConeGeometry(0.75, 1.6, 7);
+    geomLampPost = new THREE.CylinderGeometry(0.08, 0.1, 5, 6);
+    geomLampArm = new THREE.CylinderGeometry(0.05, 0.05, 1.2, 6);
+    geomLampBulb = new THREE.SphereGeometry(0.15, 8, 8);
+    geomWindow = new THREE.BoxGeometry(0.7, 0.9, 0.05);
   }
 
   function buildInfiniteWorld(){
@@ -1034,6 +1091,7 @@
     const L = CONFIG.CHUNK_LENGTH;
     const W = CONFIG.ROAD_WIDTH;
     const halfW = W/2 + 3; // borde incluido
+    const chunkIndex = chunkCounter++;
 
     // --- ÁRBOLES: 2 filas por lado ---
     const treeSpacing = CONFIG.TREE_SPACING;
@@ -1059,7 +1117,7 @@
     const lampSpacing = CONFIG.LAMP_SPACING;
     sides.forEach(side=>{
       for(let z=-L/2+lampSpacing/2; z<L/2; z+=lampSpacing){
-        const lamp = createLampPost();
+        const lamp = createLampPost(((chunkIndex + Math.floor((z + L/2) / lampSpacing)) % CONFIG.LAMP_LIGHT_EVERY) === 0);
         lamp.position.set(side*(halfW+1), 0, z);
         g.add(lamp);
       }
@@ -1067,7 +1125,7 @@
 
     // --- EDIFICIOS: uno por lado cada 60 unidades, más lejos ---
     sides.forEach(side=>{
-      for(let z=-L/2+30; z<L/2; z+=60){
+      for(let z=-L/2+35; z<L/2; z+=CONFIG.BUILDING_SPACING){
         const bldg = createBuilding();
         bldg.position.set(side*(halfW+22), 0, z+(Math.random()-0.5)*15);
         g.add(bldg);
@@ -1085,7 +1143,7 @@
     });
 
     // --- Rocas para enriquecer el fondo ---
-    for(let i=0; i<18; i++){
+    for(let i=0; i<CONFIG.ROCKS_PER_CHUNK; i++){
       const rock = createRock();
       const side = Math.random()<0.5 ? -1 : 1;
       const offset = halfW + 7 + Math.random()*20;
@@ -1101,47 +1159,48 @@
     const g = new THREE.Group();
     // Tronco
     const trunk = new THREE.Mesh(
-      new THREE.CylinderGeometry(0.15, 0.25, 1.2, 6),
+      geomTreeTrunk,
       matTrunk
     );
     trunk.position.y = 0.6;
     trunk.castShadow = true;
     g.add(trunk);
     // Copa (2 conos superpuestos)
-    const mat1 = matTree.clone();
-    mat1.color.setHSL(0.28+Math.random()*0.08, 0.6+Math.random()*0.3, 0.2+Math.random()*0.15);
-    const cone1 = new THREE.Mesh(new THREE.ConeGeometry(1.1, 2.2, 7), mat1);
+    const mat1 = treeCanopyMats[Math.floor(Math.random() * treeCanopyMats.length)] || matTree;
+    const cone1 = new THREE.Mesh(geomTreeConeLarge, mat1);
     cone1.position.y = 2.0; cone1.castShadow=true;
     g.add(cone1);
-    const cone2 = new THREE.Mesh(new THREE.ConeGeometry(0.75, 1.6, 7), mat1);
+    const cone2 = new THREE.Mesh(geomTreeConeSmall, mat1);
     cone2.position.y = 3.1; cone2.castShadow=true;
     g.add(cone2);
     return g;
   }
 
   // --- Poste de luz ---
-  function createLampPost(){
+  function createLampPost(withLight = true){
     const g = new THREE.Group();
     // Poste vertical
-    const post = new THREE.Mesh(new THREE.CylinderGeometry(0.08, 0.1, 5, 6), matLampPost);
+    const post = new THREE.Mesh(geomLampPost, matLampPost);
     post.position.y = 2.5; post.castShadow=true;
     g.add(post);
     // Brazo horizontal
-    const arm = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.05, 1.2, 6), matLampPost);
+    const arm = new THREE.Mesh(geomLampArm, matLampPost);
     arm.rotation.z = Math.PI/2;
     arm.position.set(0.6, 5, 0);
     g.add(arm);
     // Bombilla
-    const bulb = new THREE.Mesh(new THREE.SphereGeometry(0.15, 8, 8), matLampLight);
+    const bulb = new THREE.Mesh(geomLampBulb, matLampLight);
     bulb.position.set(1.1, 4.9, 0);
     g.add(bulb);
     // Luz puntual pequeña
-    const light = new THREE.PointLight(0xffeeaa, 0.55, 24);
-    light.position.set(1.1, 4.9, 0);
-    light.userData.baseIntensity = 0.55;
-    light.userData.baseDistance = 24;
-    lampLights.push(light);
-    g.add(light);
+    if(withLight){
+      const light = new THREE.PointLight(0xffeeaa, 0.5, 20);
+      light.position.set(1.1, 4.9, 0);
+      light.userData.baseIntensity = 0.5;
+      light.userData.baseDistance = 20;
+      lampLights.push(light);
+      g.add(light);
+    }
     return g;
   }
 
@@ -1152,32 +1211,42 @@
     const h = 5 + Math.random()*12;
     const d = 5 + Math.random()*4;
     const mat = matBuilding.clone();
-    mat.color.setHSL(0.55+Math.random()*0.08, 0.15, 0.18+Math.random()*0.12);
+    mat.color.setHSL(0.55+Math.random()*0.06, 0.14, 0.2+Math.random()*0.1);
 
     const bldg = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), mat);
     bldg.position.y = h/2;
-    bldg.castShadow = true;
+    bldg.castShadow = false;
     bldg.receiveShadow = true;
     g.add(bldg);
 
     // Ventanas (pequeños cubes brillantes)
-    const winMat = new THREE.MeshBasicMaterial({ color:0xffeecc });
-    const winW = 0.7, winH = 0.9, winD = 0.05;
-    const cols = Math.floor(w/1.8);
-    const rows = Math.floor(h/2);
+    const winMat = new THREE.MeshBasicMaterial({ color:0xffeecc, transparent:true, opacity:0.9 });
+    const cols = Math.max(2, Math.floor(w/1.8));
+    const rows = Math.max(2, Math.floor(h/2.3));
+    const litWindows = [];
     for(let r=0; r<rows; r++){
       for(let c=0; c<cols; c++){
-        if(Math.random()<0.55){ // 55% de ventanas encendidas
-          const win = new THREE.Mesh(new THREE.BoxGeometry(winW, winH, winD), winMat);
-          win.position.set(
+        if(Math.random()<0.45){
+          litWindows.push([
             -w/2 + 1.2 + c*(w/(cols)),
             1.2 + r*2,
             d/2+0.03
-          );
-          g.add(win);
+          ]);
         }
       }
     }
+
+    if(litWindows.length > 0){
+      const wins = new THREE.InstancedMesh(geomWindow, winMat, litWindows.length);
+      const matrix = new THREE.Matrix4();
+      litWindows.forEach((p, i)=>{
+        matrix.makeTranslation(p[0], p[1], p[2]);
+        wins.setMatrixAt(i, matrix);
+      });
+      wins.instanceMatrix.needsUpdate = true;
+      g.add(wins);
+    }
+
     return g;
   }
 

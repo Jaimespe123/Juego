@@ -200,8 +200,11 @@
 
     <!-- TIENDA DE COLORES Y MEJORAS -->
     <section id="overlayShop" class="overlay shop-overlay" style="display:none" role="dialog" aria-labelledby="shopTitle" aria-modal="true">
-      <h1 id="shopTitle">🛒 Tienda & Mejoras</h1>
-      
+      <div class="shop-header">
+        <h1 id="shopTitle">🛒 Tienda & Mejoras</h1>
+        <p class="shop-subtitle">Personaliza tu coche y potencia tu build para llegar más lejos en cada run.</p>
+      </div>
+
       <div class="shop-balance">
         <p>
           <strong>💰 Tus Monedas:</strong>
@@ -209,16 +212,16 @@
         </p>
       </div>
 
-      <h2 style="margin-top: 16px; font-size: 18px; color: var(--accent);">🎨 Colores</h2>
+      <div id="shopInsights" class="shop-insights" aria-live="polite"></div>
+
+      <h2 class="shop-section-title">🎨 Colores</h2>
       <div id="shopGrid" class="shop-grid" role="list" aria-label="Colores disponibles">
         <!-- Los colores se generan dinámicamente aquí -->
       </div>
 
-      <h2 style="margin-top: 24px; font-size: 18px; color: var(--accent);">⬆️ Mejoras Permanentes</h2>
-      <p style="font-size: 13px; color: var(--muted); margin-bottom: 12px;">
-        Las mejoras son permanentes y se aplican a todas tus partidas
-      </p>
-      <div id="upgradesGrid" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 12px; margin: 16px 0;">
+      <h2 class="shop-section-title">⬆️ Mejoras Permanentes</h2>
+      <p class="shop-note">Las mejoras son permanentes y se aplican a todas tus partidas.</p>
+      <div id="upgradesGrid" class="upgrades-grid">
         <!-- Las mejoras se generan dinámicamente aquí -->
       </div>
 
