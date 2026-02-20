@@ -43,6 +43,9 @@
     TURBO:  { name:'Turbo', color:0xff6600, icon:'⚡',  duration:6000,  effect:'turbo' },
     MAGNET: { name:'Imán',  color:0xffdd00, icon:'🧲',  duration:10000, effect:'magnet' },
     WEAPON: { name:'Arma',  color:0xff0000, icon:'🔫',  duration:15000, effect:'weapon' },
+    RAMP:   { name:'Rampa', color:0xff8800, icon:'🛷',  duration:12000, effect:'ramp'  },
+    DRONE:  { name:'Dron',  color:0x8844ff, icon:'🚁',  duration:20000, effect:'drone' },
+    MINES:  { name:'Minas', color:0xaa2200, icon:'💣',  duration:0,     effect:'mines' },
   };
 
   // ========== TIENDA ==========
@@ -86,9 +89,18 @@
     mission:null,
     powerups: new Map(),
     hasShield:false, hasTurbo:false, hasMagnet:false, hasWeapon:false,
+    hasRamp:false, hasDrone:false,
     waveConfig:null,
     waveEvent:null,
     eventRollWave:0,
+    // === NUEVAS MECÁNICAS ===
+    driftMeter:0,
+    driftMeterReady:false,
+    shockwaveCooldown:0,
+    mineCount:0,
+    zoneActive:null,
+    zoneTimer:0,
+    zoneCooldown:0,
   };
 
   // Estado del coche con física real
@@ -751,6 +763,12 @@
   let car, sun, sunMesh;
   let zombies=[], powerups=[], bullets=[], particles=[], decorations=[];
   let coins=[]; // 💰 Array de monedas coleccionables
+  let mines=[];   // 💣 Array de minas en el suelo
+  let droneObj=null; // 🚁 Objeto del dron activo
+  let droneShootTimer=0; // timer del disparo del dron
+  // === ESCENARIOS: objetos del mundo ===
+  let zoneObjects=[]; // objetos 3D de la zona activa (puente, túnel, ciudad)
+  let exhaustFlames=[]; // llamas del escape
   
   // ✨ Sistema de atmósferas dinámicas
   let currentAtmosphere = 'day';
@@ -1258,6 +1276,20 @@
     car.position.set(0, 0.75, 15);
     scene.add(car);
     
+    // === TUBOS DE ESCAPE (para llamas del turbo) ===
+    const exhaustMat = new THREE.MeshStandardMaterial({ color:0x333333, roughness:0.7, metalness:0.5 });
+    const exhaustGeom = new THREE.CylinderGeometry(0.05, 0.06, 0.4, 8);
+    const exL = new THREE.Mesh(exhaustGeom, exhaustMat);
+    exL.rotation.x = Math.PI/2;
+    exL.position.set(-0.45, 0.28, -1.55);
+    exL.userData.isExhaust = true;
+    car.add(exL);
+    const exR = new THREE.Mesh(exhaustGeom, exhaustMat.clone());
+    exR.rotation.x = Math.PI/2;
+    exR.position.set(0.45, 0.28, -1.55);
+    exR.userData.isExhaust = true;
+    car.add(exR);
+    
     // ✨ AURA DE POWER-UP - Mejora visual espectacular
     createCarAura();
   }
@@ -1636,6 +1668,94 @@
     dustGeom.attributes.aLifetime.needsUpdate=true;
   }
 
+  // === LLAMAS DE ESCAPE DEL TURBO ===
+  function spawnExhaustFlame(){
+    if(!car) return;
+    car.traverse(child=>{
+      if(!child.userData.isExhaust) return;
+      const worldPos = new THREE.Vector3();
+      child.getWorldPosition(worldPos);
+      const colors = [0xff4400, 0xff8800, 0xffcc00, 0xff2200];
+      const col = colors[Math.floor(Math.random()*colors.length)];
+      const flame = new THREE.Mesh(
+        new THREE.SphereGeometry(0.1+Math.random()*0.1, 6, 6),
+        new THREE.MeshBasicMaterial({ color:col, transparent:true, opacity:0.9 })
+      );
+      flame.position.copy(worldPos);
+      const carBack = new THREE.Vector3(0,0,1).applyQuaternion(car.quaternion);
+      flame.userData = {
+        velocity: carBack.clone().multiplyScalar(0.5+Math.random()*0.8).add(
+          new THREE.Vector3((Math.random()-0.5)*0.3, Math.random()*0.4, 0)
+        ),
+        life: 0.2+Math.random()*0.15,
+        gravity: 2,
+      };
+      scene.add(flame);
+      particles.push(flame);
+    });
+  }
+
+  // === ONDA DE CHOQUE (drift meter lleno) ===
+  function releaseShockwave(){
+    if(!car) return;
+    const carPos = car.position.clone();
+    const radius = 14;
+    let killed = 0;
+    for(let i=zombies.length-1; i>=0; i--){
+      if(zombies[i].position.distanceTo(carPos) < radius){
+        spawnExplosion(zombies[i].position.clone());
+        killZombie(zombies[i], i);
+        killed++;
+      }
+    }
+    // VFX: anillo expansivo
+    const ringMat = new THREE.MeshBasicMaterial({ color:0x00ffff, transparent:true, opacity:0.85, side:THREE.DoubleSide });
+    const ring = new THREE.Mesh(new THREE.RingGeometry(0.5, 1, 32), ringMat);
+    ring.rotation.x = -Math.PI/2;
+    ring.position.copy(carPos).setY(0.2);
+    ring.userData = { life:0.7, shockRing:true, velocity:new THREE.Vector3(), gravity:0 };
+    scene.add(ring);
+    particles.push(ring);
+
+    cameraShake(0.35, 500);
+    playSound(180, 0.4, 'sawtooth', 0.5);
+    setTimeout(()=>playSound(90,0.3,'sine',0.4),120);
+    inGameMessage(`💥 ¡ONDA DE CHOQUE! ${killed} eliminados`, 1800);
+    gameState.driftMeter=0; gameState.driftMeterReady=false;
+    gameState.shockwaveCooldown=3;
+    updateDriftMeterHUD();
+  }
+
+  function updateDriftMeterHUD(){
+    const bar = document.getElementById('driftMeterBar');
+    const label = document.getElementById('driftMeterLabel');
+    if(bar) bar.style.width = gameState.driftMeter+'%';
+    if(bar) bar.style.background = gameState.driftMeterReady ? '#00ffff' : '#ff6600';
+    if(label) label.textContent = gameState.driftMeterReady ? '💥 ONDA (Q)' : `Deriva ${Math.floor(gameState.driftMeter)}%`;
+  }
+
+  // === HUMO DE DAÑO DEL COCHE ===
+  function spawnCarDamageSmoke(){
+    if(!car) return;
+    const pos = car.position.clone();
+    pos.y += 0.8;
+    pos.x += (Math.random()-0.5)*0.8;
+    const gray = Math.floor(Math.random()*60+80);
+    const col = (gray<<16)|(gray<<8)|gray;
+    const smoke = new THREE.Mesh(
+      new THREE.SphereGeometry(0.18+Math.random()*0.12, 5, 5),
+      new THREE.MeshBasicMaterial({ color:col, transparent:true, opacity:0.55 })
+    );
+    smoke.position.copy(pos);
+    smoke.userData = {
+      velocity: new THREE.Vector3((Math.random()-0.5)*0.8, 1.2+Math.random(), (Math.random()-0.5)*0.5),
+      life: 0.8+Math.random()*0.5,
+      gravity: -0.5
+    };
+    scene.add(smoke);
+    particles.push(smoke);
+  }
+
   function spawnExplosion(pos){
     playExplosionSfx();
     for(let i=0;i<18;i++){
@@ -1977,6 +2097,13 @@
     const brake    = keys[' '];
     const handbrake= keys['shift'];
     const nitro    = keys['n'] && carState.nitro>0;
+    const shockwaveKey = keys['q'];
+
+    // --- Shockwave (Q) ---
+    if(shockwaveKey && gameState.driftMeterReady && gameState.shockwaveCooldown<=0){
+      releaseShockwave();
+    }
+    if(gameState.shockwaveCooldown>0) gameState.shockwaveCooldown -= dt;
 
     // --- Entrada de dirección ---
     const steerProfile = getSteeringProfile();
@@ -2040,6 +2167,19 @@
     const isDrifting = handbrake || (lateralSpeed > 0.05 && speed > 0.08);
     if(isDrifting) markTutorialStep('drift');
     carState.driftAmount = lerp(carState.driftAmount, isDrifting ? 1 : 0, dt*6);
+
+    // === MEDIDOR DE DERRAPE ===
+    if(isDrifting && speed > 0.1){
+      gameState.driftMeter = Math.min(100, gameState.driftMeter + dt*20);
+      if(gameState.driftMeter >= 100 && !gameState.driftMeterReady){
+        gameState.driftMeterReady = true;
+        inGameMessage('💥 ¡ONDA DE CHOQUE lista! Pulsa Q', 2200);
+        playPowerupSfx();
+      }
+    } else if(!isDrifting && !gameState.driftMeterReady){
+      gameState.driftMeter = Math.max(0, gameState.driftMeter - dt*5);
+    }
+    updateDriftMeterHUD();
 
     // Fricción lateral (más fricción = menos drift)
     let latFric = CONFIG.LATERAL_FRICTION;
@@ -2169,6 +2309,14 @@
     }
     if(nitro || gameState.hasTurbo){
       spawnDust(car.position.clone(), 4);
+      // === LLAMAS DE ESCAPE ===
+      if(Math.random() < 0.5) spawnExhaustFlame();
+    }
+
+    // === SOLTAR MINA (tecla F) ===
+    if(keys['f'] && gameState.mineCount > 0 && now - (carState._lastMine||0) > 600){
+      carState._lastMine = now;
+      placeMine();
     }
 
     // --- Límites laterales de la carretera ---
@@ -2221,6 +2369,11 @@
         const now=performance.now();
         if(!z.userData.hitCooldown || now-z.userData.hitCooldown>1000){
           z.userData.hitCooldown = now;
+          // === RAMPA: zombie sale disparado ===
+          if(gameState.hasRamp){
+            handleRampCollision(z, i);
+            continue;
+          }
           if(!gameState.hasShield){
             const dmg = z.userData.type.damage*(1-(playerData.upgrades.armor.level*0.1));
             gameState.hp -= dmg;
@@ -2331,6 +2484,20 @@
         gameState.hasWeapon=true;
         gameState.powerups.set('weapon', Date.now()+type.duration);
         inGameMessage('¡Arma activada! 🔫 (Click/E)', 2000); updatePowerupIcons(); break;
+      case 'ramp':
+        gameState.hasRamp=true;
+        gameState.powerups.set('ramp', Date.now()+type.duration);
+        createRamp();
+        inGameMessage('🛷 ¡Rampa delantera! Atropella zombies', 2000); updatePowerupIcons(); break;
+      case 'drone':
+        gameState.hasDrone=true;
+        gameState.powerups.set('drone', Date.now()+type.duration);
+        createDrone();
+        inGameMessage('🚁 ¡Dron desplegado! Dispara solo', 2000); updatePowerupIcons(); break;
+      case 'mines':
+        gameState.mineCount = Math.min(gameState.mineCount+3, 9);
+        inGameMessage(`💣 +3 Minas (F para soltar) — Total: ${gameState.mineCount}`, 2000);
+        updateMineHUD(); break;
     }
   }
 
@@ -2423,6 +2590,8 @@
           case 'turbo': gameState.hasTurbo=false; document.body.classList.remove('nitro-active'); inGameMessage('Turbo finalizado',1000); break;
           case 'magnet': gameState.hasMagnet=false; inGameMessage('Imán desactivado',1000); break;
           case 'weapon': gameState.hasWeapon=false; inGameMessage('Arma desactivada',1000); break;
+          case 'ramp': gameState.hasRamp=false; removeRamp(); inGameMessage('Rampa desactivada',1000); break;
+          case 'drone': gameState.hasDrone=false; removeDrone(); inGameMessage('Dron retirado',1000); break;
         }
       }
     }
@@ -2434,9 +2603,9 @@
     if(!elements.powerupContainer) return;
     elements.powerupContainer.innerHTML='';
 
-    const emojis={shield:'🛡️',turbo:'⚡',magnet:'🧲',weapon:'🔫'};
-    const labels={shield:'Escudo',turbo:'Nitro',magnet:'Imán',weapon:'Pistola'};
-    const colors={shield:'#00ffff',turbo:'#ff8800',magnet:'#ffdd00',weapon:'#ff4040'};
+    const emojis={shield:'🛡️',turbo:'⚡',magnet:'🧲',weapon:'🔫',ramp:'🛷',drone:'🚁'};
+    const labels={shield:'Escudo',turbo:'Nitro',magnet:'Imán',weapon:'Pistola',ramp:'Rampa',drone:'Dron'};
+    const colors={shield:'#00ffff',turbo:'#ff8800',magnet:'#ffdd00',weapon:'#ff4040',ramp:'#ff8800',drone:'#8844ff'};
 
     for(const [key,expiry] of gameState.powerups.entries()){
       const remMs = Math.max(0, expiry - Date.now());
@@ -2452,6 +2621,205 @@
       `;
       elements.powerupContainer.appendChild(icon);
     }
+  }
+
+  // ========== 💣 MINAS ==========
+  function placeMine(){
+    if(!car) return;
+    const mineMesh = new THREE.Group();
+    const body = new THREE.Mesh(
+      new THREE.SphereGeometry(0.35, 12, 12),
+      new THREE.MeshStandardMaterial({ color:0x222222, roughness:0.6, metalness:0.6 })
+    );
+    body.position.y = 0.35;
+    mineMesh.add(body);
+    // Detonador visible (punta roja)
+    const det = new THREE.Mesh(
+      new THREE.CylinderGeometry(0.05,0.05,0.25,8),
+      new THREE.MeshStandardMaterial({ color:0xff0000, emissive:0xff0000, emissiveIntensity:0.8 })
+    );
+    det.position.set(0, 0.75, 0);
+    mineMesh.add(det);
+    // Parpadeo
+    const glow = new THREE.PointLight(0xff2200, 1.5, 2.5);
+    glow.position.set(0,0.4,0);
+    mineMesh.add(glow);
+
+    // Posición: detrás del coche
+    const behind = new THREE.Vector3(0,0,1.8).applyQuaternion(car.quaternion);
+    mineMesh.position.copy(car.position).add(behind);
+    mineMesh.position.y = 0;
+    mineMesh.userData = { armTimer:0.8, armed:false }; // 0.8s para armarse
+    scene.add(mineMesh);
+    mines.push(mineMesh);
+    gameState.mineCount--;
+    updateMineHUD();
+    playSound(350,0.15,'square',0.2);
+    inGameMessage(`💣 Mina colocada — quedan ${gameState.mineCount}`, 1000);
+  }
+
+  function updateMines(dt){
+    const now = performance.now();
+    for(let i=mines.length-1; i>=0; i--){
+      const mine = mines[i];
+      mine.userData.armTimer -= dt;
+      if(!mine.userData.armed && mine.userData.armTimer <= 0) mine.userData.armed = true;
+      // Parpadeo del glow
+      const gl = mine.children.find(c=>c.isLight);
+      if(gl) gl.intensity = 0.8 + Math.sin(now*0.01)*0.5;
+
+      if(!mine.userData.armed) continue;
+      // Comprobar si algún zombie pisa la mina
+      for(let j=zombies.length-1; j>=0; j--){
+        if(mines[i] && zombies[j].position.distanceTo(mine.position) < 1.5){
+          // Explosión en cadena
+          const minePos = mine.position.clone();
+          spawnExplosion(minePos);
+          cameraShake(0.2,300);
+          // Matar zombies en radio
+          for(let k=zombies.length-1;k>=0;k--){
+            if(zombies[k].position.distanceTo(minePos)<5){
+              spawnExplosion(zombies[k].position.clone());
+              killZombie(zombies[k],k);
+            }
+          }
+          scene.remove(mine);
+          mines.splice(i,1);
+          playSound(120,0.4,'sawtooth',0.4);
+          inGameMessage('💥 ¡MINA DETONADA!', 1200);
+          break;
+        }
+      }
+      // Quitar minas muy atrás
+      if(mines[i] && car && mine.position.z > car.position.z + 40){
+        scene.remove(mine); mines.splice(i,1);
+      }
+    }
+  }
+
+  function updateMineHUD(){
+    const el = document.getElementById('mineCount');
+    const stat = document.getElementById('mineHudStat');
+    if(el) el.textContent = `💣 ×${gameState.mineCount}`;
+    if(stat) stat.style.display = gameState.mineCount > 0 ? 'flex' : 'none';
+  }
+
+  // ========== 🛷 RAMPA DELANTERA ==========
+  let rampMesh = null;
+  function createRamp(){
+    if(rampMesh) return;
+    rampMesh = new THREE.Mesh(
+      new THREE.BoxGeometry(2.0, 0.25, 1.0),
+      new THREE.MeshStandardMaterial({ color:0xff8800, roughness:0.5, metalness:0.4, emissive:0xff4400, emissiveIntensity:0.3 })
+    );
+    rampMesh.position.set(0, 0.35, 1.9);
+    rampMesh.rotation.x = -0.22; // inclinada hacia arriba
+    car.add(rampMesh);
+  }
+  function removeRamp(){
+    if(!rampMesh) return;
+    car.remove(rampMesh);
+    rampMesh = null;
+  }
+
+  // Cuando la rampa está activa, lanzar zombie hacia arriba en colisión
+  function handleRampCollision(zombie, index){
+    // Zombie sale disparado hacia arriba
+    spawnDust(zombie.position.clone(), 15);
+    playCollisionSfx();
+    addScore(zombie.userData.type.points * 2); // doble de puntos
+    // Partícula volando
+    const zPos = zombie.position.clone();
+    for(let k=0;k<6;k++){
+      const mat = new THREE.MeshBasicMaterial({ color:zombie.userData.type.color, transparent:true });
+      const bit = new THREE.Mesh(new THREE.BoxGeometry(0.2,0.2,0.2), mat);
+      bit.position.copy(zPos);
+      bit.userData = {
+        velocity: new THREE.Vector3((Math.random()-0.5)*5, 6+Math.random()*4, (Math.random()-0.5)*3),
+        life: 1.0, gravity:-9
+      };
+      scene.add(bit);
+      particles.push(bit);
+    }
+    scene.remove(zombie);
+    zombies.splice(index,1);
+    gameState.combo++;
+    gameState.kills++;
+    gameState.zombiesKilledThisWave++;
+    updateMissionProgress('kill',1);
+  }
+
+  // ========== 🚁 DRON DE APOYO ==========
+  function createDrone(){
+    if(droneObj) return;
+    droneObj = new THREE.Group();
+    const body = new THREE.Mesh(
+      new THREE.BoxGeometry(0.6, 0.18, 0.6),
+      new THREE.MeshStandardMaterial({ color:0x8844ff, roughness:0.4, metalness:0.7, emissive:0x4422aa, emissiveIntensity:0.5 })
+    );
+    droneObj.add(body);
+    // Hélices (4 brazos)
+    const armMat = new THREE.MeshStandardMaterial({ color:0x333333, roughness:0.7 });
+    [[-0.45,0,-0.45],[0.45,0,-0.45],[-0.45,0,0.45],[0.45,0,0.45]].forEach(([x,y,z])=>{
+      const arm = new THREE.Mesh(new THREE.BoxGeometry(0.35, 0.05, 0.06), armMat);
+      arm.position.set(x,y,z);
+      droneObj.add(arm);
+      const prop = new THREE.Mesh(new THREE.CylinderGeometry(0.22,0.22,0.03,12), new THREE.MeshBasicMaterial({color:0xaaaaaa, transparent:true, opacity:0.6}));
+      prop.position.set(x,0.08,z);
+      prop.userData.isProp=true;
+      droneObj.add(prop);
+    });
+    // Luz
+    const dLight = new THREE.PointLight(0x8844ff, 2, 5);
+    droneObj.add(dLight);
+    droneObj.position.set(0, 4, -1); // relativo al coche
+    car.add(droneObj);
+    droneShootTimer = 2;
+    inGameMessage('🚁 Dron de apoyo desplegado!', 1800);
+  }
+
+  function removeDrone(){
+    if(!droneObj) return;
+    car.remove(droneObj);
+    droneObj = null;
+  }
+
+  function updateDrone(dt){
+    if(!droneObj || !car) return;
+    // Hover animación
+    droneObj.position.y = 4 + Math.sin(performance.now()*0.003)*0.3;
+    droneObj.rotation.y += dt*2;
+    // Girar hélices
+    droneObj.children.forEach(c=>{ if(c.userData.isProp) c.rotation.y += dt*20; });
+
+    // Disparar al zombie más cercano
+    droneShootTimer -= dt;
+    if(droneShootTimer <= 0){
+      droneShootTimer = 2.0;
+      let nearest=null, nearDist=50;
+      zombies.forEach(z=>{
+        const d = z.position.distanceTo(car.position);
+        if(d<nearDist){ nearDist=d; nearest=z; }
+      });
+      if(nearest){
+        fireDroneBullet(nearest);
+      }
+    }
+  }
+
+  function fireDroneBullet(target){
+    if(!droneObj) return;
+    const start = new THREE.Vector3();
+    droneObj.getWorldPosition(start);
+    const dir = new THREE.Vector3().subVectors(target.position, start).normalize();
+    const bullet = new THREE.Group();
+    const bMat = new THREE.MeshBasicMaterial({ color:0xbb66ff });
+    bullet.add(new THREE.Mesh(new THREE.SphereGeometry(0.12,8,8), bMat));
+    bullet.position.copy(start);
+    bullet.userData = { velocity: dir.multiplyScalar(2.8), life:1.5, trailTimer:0, isDroneBullet:true };
+    scene.add(bullet);
+    bullets.push(bullet);
+    playSound(1200, 0.06, 'sine', 0.1);
   }
 
   // ========== BALAS ==========
@@ -2499,6 +2867,15 @@
   function updateParticles(dt){
     for(let i=particles.length-1; i>=0; i--){
       const p=particles[i];
+      // Onda de choque: se expande en vez de caer
+      if(p.userData.shockRing){
+        const s = 1 + (0.7 - p.userData.life) * 20;
+        p.scale.set(s, s, s);
+        p.material.opacity = p.userData.life * 1.1;
+        p.userData.life -= dt;
+        if(p.userData.life<=0){ scene.remove(p); particles.splice(i,1); }
+        continue;
+      }
       p.userData.velocity.y+=p.userData.gravity*dt;
       p.position.add(p.userData.velocity.clone().multiplyScalar(dt));
       p.userData.life-=dt;
@@ -2523,6 +2900,205 @@
     const s=document.createElement('style'); s.id='_dmgFlashStyle';
     s.textContent='@keyframes flashDmg{0%{opacity:1}100%{opacity:0}}';
     document.head.appendChild(s);
+  }
+
+  // ========== 🌍 SISTEMA DE ZONAS (Puente, Túnel, Ciudad) ==========
+
+  function maybeStartZone(){
+    if(gameState.zoneActive || gameState.zoneCooldown > 0 || gameState.wave < 2) return;
+    if(Math.random() > 0.012) return; // baja probabilidad por frame
+    const zones = ['bridge','tunnel','city'];
+    const zone = zones[Math.floor(Math.random()*zones.length)];
+    startZone(zone);
+  }
+
+  function startZone(zoneKey){
+    clearZoneObjects();
+    gameState.zoneActive = zoneKey;
+    gameState.zoneTimer = 30; // 30 segundos de zona
+    gameState.zoneCooldown = 0;
+
+    if(zoneKey === 'bridge') buildBridgeZone();
+    else if(zoneKey === 'tunnel') buildTunnelZone();
+    else if(zoneKey === 'city') buildCityZone();
+  }
+
+  function endZone(){
+    const prev = gameState.zoneActive;
+    clearZoneObjects();
+    gameState.zoneActive = null;
+    gameState.zoneCooldown = 20;
+    // Restaurar luces spotlights del túnel si estaban en el coche
+    if(car) car.children.filter(c=>c.isSpotLight).forEach(s=>car.remove(s));
+    // Restaurar ambient
+    if(ambientLight) ambientLight.intensity = 0.7;
+    // Restaurar ancho de carretera
+    CONFIG.ROAD_WIDTH = 18;
+    // Restaurar atmósfera de la oleada
+    changeAtmosphere(getAtmosphereForWave(gameState.wave));
+    inGameMessage('🏁 Zona especial terminada', 1500);
+  }
+
+  function clearZoneObjects(){
+    zoneObjects.forEach(o=>scene.remove(o));
+    zoneObjects=[];
+    // Restaurar ancho de carretera
+    CONFIG.ROAD_WIDTH = 18;
+  }
+
+  // --- PUENTE ---
+  function buildBridgeZone(){
+    CONFIG.ROAD_WIDTH = 11; // más estrecho!
+    inGameMessage('🌉 ¡ZONA PUENTE! Carretera estrecha', 2500);
+
+    const carZ = car ? car.position.z : 0;
+    const bridgeMat = new THREE.MeshStandardMaterial({ color:0x888888, roughness:0.7, metalness:0.3 });
+    const waterMat  = new THREE.MeshStandardMaterial({ color:0x0033aa, roughness:0.2, metalness:0.3, transparent:true, opacity:0.75 });
+    const railMat   = new THREE.MeshStandardMaterial({ color:0x555566, roughness:0.6, metalness:0.5 });
+
+    // Agua debajo
+    const water = new THREE.Mesh(new THREE.PlaneGeometry(200, 600), waterMat);
+    water.rotation.x = -Math.PI/2;
+    water.position.set(0, -3, carZ-250);
+    scene.add(water); zoneObjects.push(water);
+
+    // Vigas laterales del puente (izquierda y derecha)
+    for(let z=carZ-10; z>carZ-280; z-=20){
+      // Barandilla izquierda
+      const rL = new THREE.Mesh(new THREE.BoxGeometry(0.3, 1.5, 18), railMat);
+      rL.position.set(-6.5, 0.75, z);
+      scene.add(rL); zoneObjects.push(rL);
+      // Barandilla derecha
+      const rR = new THREE.Mesh(new THREE.BoxGeometry(0.3, 1.5, 18), railMat.clone());
+      rR.position.set(6.5, 0.75, z);
+      scene.add(rR); zoneObjects.push(rR);
+      // Columna vertical cada 40
+      if(Math.floor(z/40) !== Math.floor((z-20)/40)){
+        const colL = new THREE.Mesh(new THREE.BoxGeometry(0.5,4,0.5), bridgeMat);
+        colL.position.set(-6.5,2,z); scene.add(colL); zoneObjects.push(colL);
+        const colR = new THREE.Mesh(new THREE.BoxGeometry(0.5,4,0.5), bridgeMat.clone());
+        colR.position.set(6.5,2,z); scene.add(colR); zoneObjects.push(colR);
+      }
+    }
+    // Luz azul del puente
+    const bLight = new THREE.PointLight(0x4488ff, 3, 40);
+    bLight.position.set(0, 5, carZ-100);
+    scene.add(bLight); zoneObjects.push(bLight);
+
+    changeAtmosphere('storm'); // cielo tormentoso en el puente
+  }
+
+  // --- TÚNEL ---
+  function buildTunnelZone(){
+    inGameMessage('🕳️ ¡TÚNEL! Enciende tus luces', 2500);
+
+    const carZ = car ? car.position.z : 0;
+    const tunnelMat = new THREE.MeshStandardMaterial({ color:0x1a1a2a, roughness:0.95 });
+    const concreteMat = new THREE.MeshStandardMaterial({ color:0x3a3a4a, roughness:0.9 });
+
+    // Arcadas de túnel
+    for(let z=carZ-5; z>carZ-260; z-=14){
+      // Arco: paredes + techo
+      const wallL = new THREE.Mesh(new THREE.BoxGeometry(4, 6, 1), concreteMat);
+      wallL.position.set(-11, 3, z); scene.add(wallL); zoneObjects.push(wallL);
+      const wallR = new THREE.Mesh(new THREE.BoxGeometry(4, 6, 1), concreteMat.clone());
+      wallR.position.set(11, 3, z); scene.add(wallR); zoneObjects.push(wallR);
+      const roof = new THREE.Mesh(new THREE.BoxGeometry(30, 1.5, 1), tunnelMat);
+      roof.position.set(0, 6, z); scene.add(roof); zoneObjects.push(roof);
+    }
+    // Luces de emergencia naranjas en el túnel
+    for(let z=carZ-20; z>carZ-250; z-=30){
+      const eLight = new THREE.PointLight(0xff8800, 1.2, 18);
+      eLight.position.set(0, 4.5, z);
+      scene.add(eLight); zoneObjects.push(eLight);
+    }
+
+    // Luces delanteras del coche (spotlights fuertes)
+    const spotL = new THREE.SpotLight(0xffffff, 8, 35, Math.PI/7, 0.3);
+    spotL.position.set(-0.6, 0.8, 1.5);
+    spotL.target.position.set(-0.6, 0, -15);
+    if(car){ car.add(spotL); car.add(spotL.target); }
+    const spotR = new THREE.SpotLight(0xffffff, 8, 35, Math.PI/7, 0.3);
+    spotR.position.set(0.6, 0.8, 1.5);
+    spotR.target.position.set(0.6, 0, -15);
+    if(car){ car.add(spotR); car.add(spotR.target); }
+    zoneObjects.push(spotL, spotR);
+
+    changeAtmosphere('night');
+    // Hacer aún más oscuro
+    if(ambientLight) ambientLight.intensity = 0.05;
+  }
+
+  // --- CIUDAD ABANDONADA ---
+  function buildCityZone(){
+    inGameMessage('🏚️ ¡CIUDAD ABANDONADA! Esquiva los escombros', 2500);
+
+    const carZ = car ? car.position.z : 0;
+    const rubbleMat = new THREE.MeshStandardMaterial({ color:0x4a4a4a, roughness:0.95 });
+    const buildMat  = new THREE.MeshStandardMaterial({ color:0x2a2030, roughness:0.9 });
+    const signMat   = new THREE.MeshStandardMaterial({ color:0x1a1a1a, roughness:0.8, metalness:0.2 });
+
+    // Edificios en ruinas a los lados
+    for(let z=carZ-10; z>carZ-270; z-=25){
+      const side = Math.random()<0.5 ? -1 : 1;
+      const h = 6 + Math.random()*10;
+      const building = new THREE.Mesh(new THREE.BoxGeometry(5+Math.random()*3, h, 6+Math.random()*4), buildMat);
+      building.position.set(side*(12+Math.random()*4), h/2, z+(Math.random()-0.5)*12);
+      scene.add(building); zoneObjects.push(building);
+
+      // Ventanas rotas (pequeñas cajas oscuras)
+      for(let w=0;w<4;w++){
+        const win = new THREE.Mesh(new THREE.BoxGeometry(0.8,0.8,0.15), new THREE.MeshBasicMaterial({color:0x0a0a0a}));
+        win.position.set(building.position.x - side*2.6, building.position.y - h*0.2 + w*1.8, building.position.z);
+        scene.add(win); zoneObjects.push(win);
+      }
+    }
+
+    // Escombros en la carretera (obstáculos visuales, el jugador los puede sortear)
+    for(let z=carZ-25; z>carZ-260; z-=18){
+      if(Math.random()<0.65){
+        const side2 = (Math.random()-0.5)*10;
+        const rubble = new THREE.Mesh(
+          new THREE.BoxGeometry(1.2+Math.random(), 0.6+Math.random()*0.4, 0.8+Math.random()),
+          rubbleMat
+        );
+        rubble.position.set(side2, 0.35, z);
+        rubble.rotation.y = Math.random()*Math.PI;
+        scene.add(rubble); zoneObjects.push(rubble);
+      }
+    }
+
+    // Carteles rotos
+    for(let z=carZ-30; z>carZ-250; z-=50){
+      const sign = new THREE.Mesh(new THREE.BoxGeometry(3, 1.5, 0.15), signMat);
+      sign.position.set((Math.random()-0.5)*12, 3.5, z);
+      sign.rotation.z = (Math.random()-0.5)*0.4;
+      scene.add(sign); zoneObjects.push(sign);
+    }
+
+    // Luz de incendios (naranja parpadeante)
+    for(let z=carZ-40; z>carZ-240; z-=60){
+      const fire = new THREE.PointLight(0xff5500, 3, 20);
+      fire.position.set((Math.random()-0.5)*14, 0.5, z);
+      fire.userData.isFireLight = true;
+      scene.add(fire); zoneObjects.push(fire);
+    }
+
+    changeAtmosphere('storm');
+  }
+
+  function updateZone(dt){
+    if(!gameState.zoneActive) return;
+    gameState.zoneTimer -= dt;
+
+    // Efectos animados de zona
+    zoneObjects.forEach(o=>{
+      if(o.userData.isFireLight){
+        o.intensity = 2 + Math.sin(performance.now()*0.008)*1.5;
+      }
+    });
+
+    if(gameState.zoneTimer <= 0) endZone();
   }
 
   // ========== RECICLAJE DEL MUNDO INFINITO ==========
@@ -2614,7 +3190,16 @@
       updateBullets(dt);
       updateParticles(dt);
       updatePowerups(dt);
+      updateMines(dt);         // 💣 Minas
+      updateDrone(dt);         // 🚁 Dron
+      updateZone(dt);          // 🌍 Zona activa
+      if(gameState.zoneCooldown > 0) gameState.zoneCooldown -= dt;
+      maybeStartZone();        // Intentar iniciar zona
       updateCarAura(); // ✨ Actualizar aura visual
+
+      // === Humo de daño al coche ===
+      if(gameState.hp < 50 && Math.random() < 0.08) spawnCarDamageSmoke();
+      if(gameState.hp < 25 && Math.random() < 0.12) spawnCarDamageSmoke();
 
       // Puntos por sobrevivir
       gameState.score += 0.03 * carState.velocity.length() * dt * 100;
@@ -2733,6 +3318,10 @@
     bullets.forEach(b=>scene.remove(b)); bullets.length=0;
     particles.forEach(p=>scene.remove(p)); particles.length=0;
     coins.forEach(c=>scene.remove(c)); coins.length=0; // 💰 Limpiar monedas
+    mines.forEach(m=>scene.remove(m)); mines.length=0; // 💣 Limpiar minas
+    clearZoneObjects();
+    removeDrone();
+    removeRamp();
 
     gameState.score=0; gameState.hp=gameState.maxHp;
     gameState.combo=0; gameState.comboTimer=0; gameState.maxCombo=0;
@@ -2743,6 +3332,11 @@
     gameState.lastSpawn=performance.now();
     gameState.powerups.clear();
     gameState.hasShield=false; gameState.hasTurbo=false; gameState.hasMagnet=false; gameState.hasWeapon=false;
+    gameState.hasRamp=false; gameState.hasDrone=false;
+    gameState.driftMeter=0; gameState.driftMeterReady=false; gameState.shockwaveCooldown=0;
+    gameState.mineCount=0;
+    gameState.zoneActive=null; gameState.zoneTimer=0; gameState.zoneCooldown=0;
+    updateDriftMeterHUD(); updateMineHUD();
     document.body.classList.remove('nitro-active');
 
     Object.keys(keys).forEach(k=> keys[k]=false);
