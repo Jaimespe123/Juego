@@ -126,6 +126,7 @@
     nightLightBoost: 1.2,
     steeringMode: 'normal',
     dailyMission: null,
+    graphicsQuality: 'high',   // ultra | high | medium | low | potato
     upgrades: JSON.parse(JSON.stringify(SHOP_UPGRADES)),
   };
 
@@ -149,7 +150,11 @@
         elements.nightLightBoost.value = playerData.nightLightBoost || 1.2;
         updateNightLightBoostDisplay();
       }
+      if(!playerData.graphicsQuality) playerData.graphicsQuality = 'high';
+      const gqEl = document.getElementById('graphicsQuality');
+      if(gqEl) gqEl.value = playerData.graphicsQuality;
       applyUpgrades();
+      // applyQuality se llamará después de que el renderer esté listo
     } catch(e){ console.warn('Error cargando datos:', e); }
   }
 
@@ -162,6 +167,46 @@
     const u = playerData.upgrades;
     gameState.maxHp = 100 + (u.maxHealth.level * u.maxHealth.bonus);
     CONFIG.MAX_SPEED = 0.48 + (u.speed.level * u.speed.bonus);
+  }
+
+  // ========== 🎮 CALIDAD GRÁFICA ==========
+  const QUALITY_PROFILES = {
+    ultra:  { pixelRatio:2.0,  shadows:true,  bloom:true,  dust:160, antialias:true,  label:'Ultra ✨'   },
+    high:   { pixelRatio:1.5,  shadows:true,  bloom:true,  dust:120, antialias:true,  label:'Alto 🔥'    },
+    medium: { pixelRatio:1.0,  shadows:false, bloom:true,  dust:80,  antialias:false, label:'Medio ⚡'   },
+    low:    { pixelRatio:0.75, shadows:false, bloom:false, dust:40,  antialias:false, label:'Bajo 🐢'    },
+    potato: { pixelRatio:0.45, shadows:false, bloom:false, dust:20,  antialias:false, label:'Patata 🥔'  },
+  };
+
+  function applyQuality(key){
+    const q = QUALITY_PROFILES[key];
+    if(!q) return;
+    playerData.graphicsQuality = key;
+    savePlayerData();
+
+    if(!renderer) return; // renderer aún no listo, se aplica más tarde
+
+    // Pixel ratio (más bajo = píxeles más grandes = mucho más rápido)
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio, q.pixelRatio));
+
+    // Sombras
+    renderer.shadowMap.enabled = q.shadows;
+    if(sun) sun.castShadow = q.shadows;
+
+    // Partículas de polvo
+    CONFIG.MAX_DUST_PARTICLES = q.dust;
+
+    // Post-processing (bloom)
+    if(composer){
+      // Activar/desactivar el UnrealBloomPass (índice 1)
+      if(composer.passes && composer.passes[1]){
+        composer.passes[1].enabled = q.bloom;
+      }
+    }
+
+    // Mensaje de confirmación
+    inGameMessage(`🎮 Calidad: ${q.label}`, 1800);
+    console.log(`✅ Calidad gráfica aplicada: ${key} | PR=${q.pixelRatio} | shadows=${q.shadows} | bloom=${q.bloom} | dust=${q.dust}`);
   }
 
   // ========== UTILIDADES ==========
@@ -529,6 +574,10 @@
     updateLampAtmosphere();
     savePlayerData();
   });
+
+  // Calidad gráfica
+  const gqEl = document.getElementById('graphicsQuality');
+  if(gqEl) gqEl.addEventListener('change', e=>{ applyQuality(e.target.value); });
 
   // ========== EVENTOS UI ==========
   elements.btnSettings.addEventListener('click', ()=>{
@@ -2902,187 +2951,234 @@
     document.head.appendChild(s);
   }
 
-  // ========== 🌍 SISTEMA DE ZONAS (Puente, Túnel, Ciudad) ==========
+  // ========== 🌍 SISTEMA DE ZONAS — OPTIMIZADO CON InstancedMesh ==========
+  // Cada zona usa ≤ 8 draw calls y ≤ 2 luces dinámicas para no colapsar el renderer.
+
+  const _dummy = new THREE.Object3D(); // reutilizado para todas las instancias
 
   function maybeStartZone(){
     if(gameState.zoneActive || gameState.zoneCooldown > 0 || gameState.wave < 2) return;
-    if(Math.random() > 0.012) return; // baja probabilidad por frame
+    if(Math.random() > 0.012) return;
     const zones = ['bridge','tunnel','city'];
-    const zone = zones[Math.floor(Math.random()*zones.length)];
-    startZone(zone);
+    startZone(zones[Math.floor(Math.random()*zones.length)]);
   }
 
   function startZone(zoneKey){
     clearZoneObjects();
     gameState.zoneActive = zoneKey;
-    gameState.zoneTimer = 30; // 30 segundos de zona
+    gameState.zoneTimer = 32;
     gameState.zoneCooldown = 0;
-
     if(zoneKey === 'bridge') buildBridgeZone();
     else if(zoneKey === 'tunnel') buildTunnelZone();
     else if(zoneKey === 'city') buildCityZone();
   }
 
   function endZone(){
-    const prev = gameState.zoneActive;
     clearZoneObjects();
     gameState.zoneActive = null;
-    gameState.zoneCooldown = 20;
-    // Restaurar luces spotlights del túnel si estaban en el coche
-    if(car) car.children.filter(c=>c.isSpotLight).forEach(s=>car.remove(s));
-    // Restaurar ambient
+    gameState.zoneCooldown = 22;
+    // Limpiar spotlights añadidos al coche en el túnel
+    if(car){
+      const toRemove = car.children.filter(c=>c.isSpotLight || (c.isObject3D && c.userData.isTunnelLight));
+      toRemove.forEach(s=>car.remove(s));
+    }
     if(ambientLight) ambientLight.intensity = 0.7;
-    // Restaurar ancho de carretera
     CONFIG.ROAD_WIDTH = 18;
-    // Restaurar atmósfera de la oleada
     changeAtmosphere(getAtmosphereForWave(gameState.wave));
     inGameMessage('🏁 Zona especial terminada', 1500);
   }
 
   function clearZoneObjects(){
-    zoneObjects.forEach(o=>scene.remove(o));
-    zoneObjects=[];
-    // Restaurar ancho de carretera
+    zoneObjects.forEach(o=>{ scene.remove(o); if(o.geometry) o.geometry.dispose(); });
+    zoneObjects = [];
     CONFIG.ROAD_WIDTH = 18;
   }
 
-  // --- PUENTE ---
+  // ─── Helpers ─────────────────────────────────────────────────────────────
+  function addInstanced(geom, mat, positions){
+    // positions: array de {x,y,z, rx,ry,rz, sx,sy,sz}  (rot y scale opcionales)
+    const mesh = new THREE.InstancedMesh(geom, mat, positions.length);
+    mesh.castShadow = false; mesh.receiveShadow = false;
+    positions.forEach((p,i)=>{
+      _dummy.position.set(p.x, p.y, p.z);
+      _dummy.rotation.set(p.rx||0, p.ry||0, p.rz||0);
+      _dummy.scale.set(p.sx||1, p.sy||1, p.sz||1);
+      _dummy.updateMatrix();
+      mesh.setMatrixAt(i, _dummy.matrix);
+    });
+    mesh.instanceMatrix.needsUpdate = true;
+    scene.add(mesh);
+    zoneObjects.push(mesh);
+    return mesh;
+  }
+
+  function addZoneLight(color, intensity, distance, x, y, z, isAnimated){
+    const light = new THREE.PointLight(color, intensity, distance);
+    light.position.set(x, y, z);
+    if(isAnimated) light.userData.isFireLight = true;
+    scene.add(light);
+    zoneObjects.push(light);
+    return light;
+  }
+
+  // ─── 🌉 PUENTE ────────────────────────────────────────────────────────────
   function buildBridgeZone(){
-    CONFIG.ROAD_WIDTH = 11; // más estrecho!
-    inGameMessage('🌉 ¡ZONA PUENTE! Carretera estrecha', 2500);
+    CONFIG.ROAD_WIDTH = 11;
+    inGameMessage('🌉 ¡ZONA PUENTE! Carretera estrecha sobre el río', 2800);
+    const Z0 = car ? car.position.z : 0;
+    const LEN = 260, STEP = 22, N = Math.floor(LEN/STEP);
 
-    const carZ = car ? car.position.z : 0;
-    const bridgeMat = new THREE.MeshStandardMaterial({ color:0x888888, roughness:0.7, metalness:0.3 });
-    const waterMat  = new THREE.MeshStandardMaterial({ color:0x0033aa, roughness:0.2, metalness:0.3, transparent:true, opacity:0.75 });
-    const railMat   = new THREE.MeshStandardMaterial({ color:0x555566, roughness:0.6, metalness:0.5 });
-
-    // Agua debajo
-    const water = new THREE.Mesh(new THREE.PlaneGeometry(200, 600), waterMat);
+    // 1) Agua — 1 mesh
+    const water = new THREE.Mesh(
+      new THREE.PlaneGeometry(160, LEN+40),
+      new THREE.MeshStandardMaterial({ color:0x0044bb, roughness:0.15, metalness:0.35, transparent:true, opacity:0.82 })
+    );
     water.rotation.x = -Math.PI/2;
-    water.position.set(0, -3, carZ-250);
+    water.position.set(0, -3.2, Z0 - LEN/2);
     scene.add(water); zoneObjects.push(water);
 
-    // Vigas laterales del puente (izquierda y derecha)
-    for(let z=carZ-10; z>carZ-280; z-=20){
-      // Barandilla izquierda
-      const rL = new THREE.Mesh(new THREE.BoxGeometry(0.3, 1.5, 18), railMat);
-      rL.position.set(-6.5, 0.75, z);
-      scene.add(rL); zoneObjects.push(rL);
-      // Barandilla derecha
-      const rR = new THREE.Mesh(new THREE.BoxGeometry(0.3, 1.5, 18), railMat.clone());
-      rR.position.set(6.5, 0.75, z);
-      scene.add(rR); zoneObjects.push(rR);
-      // Columna vertical cada 40
-      if(Math.floor(z/40) !== Math.floor((z-20)/40)){
-        const colL = new THREE.Mesh(new THREE.BoxGeometry(0.5,4,0.5), bridgeMat);
-        colL.position.set(-6.5,2,z); scene.add(colL); zoneObjects.push(colL);
-        const colR = new THREE.Mesh(new THREE.BoxGeometry(0.5,4,0.5), bridgeMat.clone());
-        colR.position.set(6.5,2,z); scene.add(colR); zoneObjects.push(colR);
-      }
+    // 2) Barandilla continua izquierda — 1 InstancedMesh
+    const railPositions = [];
+    for(let i=0;i<N;i++){
+      const z = Z0 - 10 - i*STEP;
+      railPositions.push({ x:-6.2, y:1.1, z, sx:1, sy:1, sz:STEP+0.5 });
     }
-    // Luz azul del puente
-    const bLight = new THREE.PointLight(0x4488ff, 3, 40);
-    bLight.position.set(0, 5, carZ-100);
-    scene.add(bLight); zoneObjects.push(bLight);
+    addInstanced(
+      new THREE.BoxGeometry(0.25, 1.0, 1),
+      new THREE.MeshStandardMaterial({ color:0x778899, roughness:0.5, metalness:0.55 }),
+      railPositions
+    );
 
-    changeAtmosphere('storm'); // cielo tormentoso en el puente
+    // 3) Barandilla continua derecha — 1 InstancedMesh
+    const railPosR = railPositions.map(p=>({ ...p, x:6.2 }));
+    addInstanced(
+      new THREE.BoxGeometry(0.25, 1.0, 1),
+      new THREE.MeshStandardMaterial({ color:0x778899, roughness:0.5, metalness:0.55 }),
+      railPosR
+    );
+
+    // 4) Columnas de soporte cada ~44m — 1 InstancedMesh
+    const colPos = [];
+    for(let i=0;i<Math.floor(LEN/44);i++){
+      const z = Z0 - 22 - i*44;
+      colPos.push({ x:-6.2, y:1.5, z, sx:0.6, sy:3, sz:0.6 });
+      colPos.push({ x: 6.2, y:1.5, z, sx:0.6, sy:3, sz:0.6 });
+    }
+    addInstanced(
+      new THREE.BoxGeometry(1, 1, 1),
+      new THREE.MeshStandardMaterial({ color:0x556677, roughness:0.7, metalness:0.4 }),
+      colPos
+    );
+
+    // 5) Cables de suspensión: 2 planos largos inclinados (muy barato)
+    const cableGeom = new THREE.PlaneGeometry(0.08, LEN*0.7);
+    const cableMat  = new THREE.MeshBasicMaterial({ color:0x99aacc, side:THREE.DoubleSide });
+    [-6.2, 6.2].forEach(cx=>{
+      const cable = new THREE.Mesh(cableGeom, cableMat);
+      cable.rotation.z = Math.PI/2;
+      cable.position.set(cx, 3.5, Z0 - LEN/2);
+      scene.add(cable); zoneObjects.push(cable);
+    });
+
+    // 6) Solo 2 luces azules — máximo permitido
+    addZoneLight(0x3399ff, 4, 80, -6.2, 5, Z0 - 80);
+    addZoneLight(0x3399ff, 4, 80,  6.2, 5, Z0 - 180);
+
+    changeAtmosphere('storm');
   }
 
-  // --- TÚNEL ---
+  // ─── 🕳️ TÚNEL ────────────────────────────────────────────────────────────
   function buildTunnelZone(){
-    inGameMessage('🕳️ ¡TÚNEL! Enciende tus luces', 2500);
+    inGameMessage('🕳️ ¡TÚNEL! Solo tus faros te guiarán...', 2800);
+    const Z0 = car ? car.position.z : 0;
+    const LEN = 260, STEP = 18, N = Math.floor(LEN/STEP);
 
-    const carZ = car ? car.position.z : 0;
-    const tunnelMat = new THREE.MeshStandardMaterial({ color:0x1a1a2a, roughness:0.95 });
-    const concreteMat = new THREE.MeshStandardMaterial({ color:0x3a3a4a, roughness:0.9 });
-
-    // Arcadas de túnel
-    for(let z=carZ-5; z>carZ-260; z-=14){
-      // Arco: paredes + techo
-      const wallL = new THREE.Mesh(new THREE.BoxGeometry(4, 6, 1), concreteMat);
-      wallL.position.set(-11, 3, z); scene.add(wallL); zoneObjects.push(wallL);
-      const wallR = new THREE.Mesh(new THREE.BoxGeometry(4, 6, 1), concreteMat.clone());
-      wallR.position.set(11, 3, z); scene.add(wallR); zoneObjects.push(wallR);
-      const roof = new THREE.Mesh(new THREE.BoxGeometry(30, 1.5, 1), tunnelMat);
-      roof.position.set(0, 6, z); scene.add(roof); zoneObjects.push(roof);
+    // 1) Pared continua izquierda — 1 InstancedMesh escalado
+    const wallsL = [], wallsR = [], roofs = [];
+    for(let i=0;i<N;i++){
+      const z = Z0 - 8 - i*STEP;
+      wallsL.push({ x:-12, y:3.5, z, sx:1, sy:7, sz:STEP+0.5 });
+      wallsR.push({ x: 12, y:3.5, z, sx:1, sy:7, sz:STEP+0.5 });
+      roofs.push(  { x:  0, y:7.2, z, sx:26, sy:1, sz:STEP+0.5 });
     }
-    // Luces de emergencia naranjas en el túnel
-    for(let z=carZ-20; z>carZ-250; z-=30){
-      const eLight = new THREE.PointLight(0xff8800, 1.2, 18);
-      eLight.position.set(0, 4.5, z);
-      scene.add(eLight); zoneObjects.push(eLight);
-    }
+    const tunnelMat = new THREE.MeshStandardMaterial({ color:0x2a2a38, roughness:0.95 });
+    addInstanced(new THREE.BoxGeometry(1,1,1), tunnelMat, wallsL);
+    addInstanced(new THREE.BoxGeometry(1,1,1), tunnelMat, wallsR);
+    addInstanced(new THREE.BoxGeometry(1,1,1), new THREE.MeshStandardMaterial({ color:0x1a1a28, roughness:1 }), roofs);
 
-    // Luces delanteras del coche (spotlights fuertes)
-    const spotL = new THREE.SpotLight(0xffffff, 8, 35, Math.PI/7, 0.3);
-    spotL.position.set(-0.6, 0.8, 1.5);
-    spotL.target.position.set(-0.6, 0, -15);
-    if(car){ car.add(spotL); car.add(spotL.target); }
-    const spotR = new THREE.SpotLight(0xffffff, 8, 35, Math.PI/7, 0.3);
-    spotR.position.set(0.6, 0.8, 1.5);
-    spotR.target.position.set(0.6, 0, -15);
-    if(car){ car.add(spotR); car.add(spotR.target); }
-    zoneObjects.push(spotL, spotR);
+    // 2) Marcadores de techo (línea de luces de emergencia naranja) — solo 2 luces reales
+    // Las otras son falsas: objetos brillantes básicos sin luz
+    const fakeLightPositions = [];
+    for(let i=0;i<Math.floor(LEN/30);i++){
+      fakeLightPositions.push({ x:0, y:6.5, z:Z0-20-i*30, sx:0.4, sy:0.15, sz:0.4 });
+    }
+    addInstanced(
+      new THREE.BoxGeometry(1,1,1),
+      new THREE.MeshBasicMaterial({ color:0xff8800 }),
+      fakeLightPositions
+    );
+    // Solo 2 luces reales en el túnel
+    addZoneLight(0xff6600, 3, 50, 0, 5.5, Z0 - 60);
+    addZoneLight(0xff6600, 3, 50, 0, 5.5, Z0 - 180);
+
+    // 3) Spotlight en el coche (solo UNO, más barato)
+    const spot = new THREE.SpotLight(0xffffff, 12, 40, Math.PI/6, 0.35);
+    spot.position.set(0, 1, 1.8);
+    spot.target.position.set(0, -1, -20);
+    spot.userData.isTunnelLight = true;
+    if(car){ car.add(spot); car.add(spot.target); }
+    zoneObjects.push(spot);
 
     changeAtmosphere('night');
-    // Hacer aún más oscuro
-    if(ambientLight) ambientLight.intensity = 0.05;
+    if(ambientLight) ambientLight.intensity = 0.04;
   }
 
-  // --- CIUDAD ABANDONADA ---
+  // ─── 🏚️ CIUDAD ABANDONADA ─────────────────────────────────────────────────
   function buildCityZone(){
-    inGameMessage('🏚️ ¡CIUDAD ABANDONADA! Esquiva los escombros', 2500);
+    inGameMessage('🏚️ ¡CIUDAD ABANDONADA! Cuidado con las ruinas', 2800);
+    const Z0 = car ? car.position.z : 0;
+    const LEN = 260;
 
-    const carZ = car ? car.position.z : 0;
-    const rubbleMat = new THREE.MeshStandardMaterial({ color:0x4a4a4a, roughness:0.95 });
-    const buildMat  = new THREE.MeshStandardMaterial({ color:0x2a2030, roughness:0.9 });
-    const signMat   = new THREE.MeshStandardMaterial({ color:0x1a1a1a, roughness:0.8, metalness:0.2 });
+    // 1) Edificios lado izquierdo — 1 InstancedMesh
+    const buildL=[], buildR=[];
+    const buildHeights=[8,12,7,15,10,9,13,6,11,8];
+    buildHeights.forEach((h,i)=>{
+      const z = Z0 - 20 - i*26;
+      const w = 5+((i*7)%4), d=5+((i*3)%5);
+      buildL.push({ x:-(13+(i%2)*2), y:h/2, z, sx:w, sy:h, sz:d });
+      buildR.push({ x:  13+(i%2)*2,  y:h/2, z:z-13, sx:w+1, sy:h*0.85, sz:d });
+    });
+    const buildMat = new THREE.MeshStandardMaterial({ color:0x252030, roughness:0.9 });
+    addInstanced(new THREE.BoxGeometry(1,1,1), buildMat, buildL);
+    addInstanced(new THREE.BoxGeometry(1,1,1), new THREE.MeshStandardMaterial({ color:0x1e1a2a, roughness:0.9 }), buildR);
 
-    // Edificios en ruinas a los lados
-    for(let z=carZ-10; z>carZ-270; z-=25){
-      const side = Math.random()<0.5 ? -1 : 1;
-      const h = 6 + Math.random()*10;
-      const building = new THREE.Mesh(new THREE.BoxGeometry(5+Math.random()*3, h, 6+Math.random()*4), buildMat);
-      building.position.set(side*(12+Math.random()*4), h/2, z+(Math.random()-0.5)*12);
-      scene.add(building); zoneObjects.push(building);
-
-      // Ventanas rotas (pequeñas cajas oscuras)
-      for(let w=0;w<4;w++){
-        const win = new THREE.Mesh(new THREE.BoxGeometry(0.8,0.8,0.15), new THREE.MeshBasicMaterial({color:0x0a0a0a}));
-        win.position.set(building.position.x - side*2.6, building.position.y - h*0.2 + w*1.8, building.position.z);
-        scene.add(win); zoneObjects.push(win);
-      }
+    // 2) Escombros en carretera — 1 InstancedMesh (posiciones fijas con seed)
+    const rubblePos = [];
+    for(let i=0;i<14;i++){
+      const z = Z0 - 25 - i*18;
+      const s = ((i*13)%7+6)/10; // pseudo-random estable
+      if(i%3!==0) rubblePos.push({ x:((i*7)%10)-5, y:0.28, z, ry:i*0.8, sx:s*1.3, sy:s*0.6, sz:s });
     }
+    addInstanced(
+      new THREE.BoxGeometry(1,1,1),
+      new THREE.MeshStandardMaterial({ color:0x4a4848, roughness:0.95 }),
+      rubblePos
+    );
 
-    // Escombros en la carretera (obstáculos visuales, el jugador los puede sortear)
-    for(let z=carZ-25; z>carZ-260; z-=18){
-      if(Math.random()<0.65){
-        const side2 = (Math.random()-0.5)*10;
-        const rubble = new THREE.Mesh(
-          new THREE.BoxGeometry(1.2+Math.random(), 0.6+Math.random()*0.4, 0.8+Math.random()),
-          rubbleMat
-        );
-        rubble.position.set(side2, 0.35, z);
-        rubble.rotation.y = Math.random()*Math.PI;
-        scene.add(rubble); zoneObjects.push(rubble);
-      }
+    // 3) Postes caídos — 1 InstancedMesh
+    const polePos = [];
+    for(let i=0;i<5;i++){
+      polePos.push({ x:((i*9)%16)-8, y:1, z:Z0-40-i*48, rx:Math.PI/2, rz:0.3-i*0.12, sx:0.2, sy:6, sz:0.2 });
     }
+    addInstanced(
+      new THREE.CylinderGeometry(1,1,1,8),
+      new THREE.MeshStandardMaterial({ color:0x333333, roughness:0.8, metalness:0.5 }),
+      polePos
+    );
 
-    // Carteles rotos
-    for(let z=carZ-30; z>carZ-250; z-=50){
-      const sign = new THREE.Mesh(new THREE.BoxGeometry(3, 1.5, 0.15), signMat);
-      sign.position.set((Math.random()-0.5)*12, 3.5, z);
-      sign.rotation.z = (Math.random()-0.5)*0.4;
-      scene.add(sign); zoneObjects.push(sign);
-    }
-
-    // Luz de incendios (naranja parpadeante)
-    for(let z=carZ-40; z>carZ-240; z-=60){
-      const fire = new THREE.PointLight(0xff5500, 3, 20);
-      fire.position.set((Math.random()-0.5)*14, 0.5, z);
-      fire.userData.isFireLight = true;
-      scene.add(fire); zoneObjects.push(fire);
-    }
+    // 4) Solo 2 luces de fuego animadas
+    addZoneLight(0xff4400, 5, 28, -8, 0.8, Z0 - 70, true);
+    addZoneLight(0xff5500, 5, 28,  9, 0.8, Z0 - 170, true);
 
     changeAtmosphere('storm');
   }
@@ -3090,14 +3186,11 @@
   function updateZone(dt){
     if(!gameState.zoneActive) return;
     gameState.zoneTimer -= dt;
-
-    // Efectos animados de zona
+    const t = performance.now();
+    // Animar SOLO las luces de fuego (nada más)
     zoneObjects.forEach(o=>{
-      if(o.userData.isFireLight){
-        o.intensity = 2 + Math.sin(performance.now()*0.008)*1.5;
-      }
+      if(o.userData.isFireLight) o.intensity = 3.5 + Math.sin(t*0.009)*2;
     });
-
     if(gameState.zoneTimer <= 0) endZone();
   }
 
@@ -3425,6 +3518,8 @@
     updateMenuStats();
     gameState.lastTime=performance.now();
     animate(gameState.lastTime);
+    // Aplicar calidad guardada ahora que el renderer está listo
+    applyQuality(playerData.graphicsQuality || 'high');
     inGameMessage('🎮 ¡Bienvenido! Usa WASD + Ratón. Shift = Drift', 4000);
     window.cvz={scene,car,zombies,powerups,startGame,resetGame,playerData,gameState};
     console.log('✅ Juego ULTRA inicializado con mundo infinito y física mejorada');
