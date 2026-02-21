@@ -41,14 +41,18 @@
 
   // ========== POWER-UPS ==========
   const POWERUP_TYPES = {
-    HEALTH: { name:'Vida',  color:0x00ff00, icon:'❤️',  duration:0,     effect:'heal' },
-    SHIELD: { name:'Escudo',color:0x00ffff, icon:'🛡️',  duration:8000,  effect:'shield' },
-    TURBO:  { name:'Turbo', color:0xff6600, icon:'⚡',  duration:6000,  effect:'turbo' },
-    MAGNET: { name:'Imán',  color:0xffdd00, icon:'🧲',  duration:10000, effect:'magnet' },
-    WEAPON: { name:'Arma',  color:0xff0000, icon:'🔫',  duration:15000, effect:'weapon' },
-    RAMP:   { name:'Rampa', color:0xff8800, icon:'🛷',  duration:12000, effect:'ramp'  },
-    DRONE:  { name:'Dron',  color:0x8844ff, icon:'🚁',  duration:20000, effect:'drone' },
-    MINES:  { name:'Minas', color:0xaa2200, icon:'💣',  duration:0,     effect:'mines' },
+    HEALTH:   { name:'Vida',          color:0x00ff00, icon:'❤️',  duration:0,     effect:'heal'   },
+    SHIELD:   { name:'Escudo',        color:0x00ffff, icon:'🛡️',  duration:8000,  effect:'shield' },
+    TURBO:    { name:'Turbo',         color:0xff6600, icon:'⚡',  duration:6000,  effect:'turbo'  },
+    MAGNET:   { name:'Imán',          color:0xffdd00, icon:'🧲',  duration:10000, effect:'magnet' },
+    WEAPON:   { name:'Arma Auto',     color:0xff0000, icon:'🔫',  duration:15000, effect:'weapon' },
+    RAMP:     { name:'Rampa',         color:0xff8800, icon:'🛷',  duration:12000, effect:'ramp'   },
+    DRONE:    { name:'Dron',          color:0x8844ff, icon:'🚁',  duration:20000, effect:'drone'  },
+    MINES:    { name:'Minas',         color:0xaa2200, icon:'💣',  duration:0,     effect:'mines'  },
+    FREEZE:   { name:'Congelación',   color:0x88ddff, icon:'❄️',  duration:7000,  effect:'freeze' },
+    REPAIR:   { name:'Reparación',    color:0x44ff88, icon:'🔧',  duration:10000, effect:'repair' },
+    LASER:    { name:'Láser',         color:0xff44ff, icon:'🔆',  duration:10000, effect:'laser'  },
+    ETRAP:    { name:'Trampa Eléc.',  color:0xffee00, icon:'⚡⚡', duration:0,     effect:'etrap'  },
   };
 
   // ========== DIFICULTAD ==========
@@ -61,22 +65,26 @@
 
   // ========== MEJORAS ROGUELIKE ==========
   const ROGUELIKE_UPGRADES = [
-    { id:'speedBoost',  icon:'🏎️', name:'Turbo permanente',  desc:'+20% velocidad máxima esta run',         color:'#ff6600', apply:()=>{ CONFIG.MAX_SPEED *= 1.20; } },
-    { id:'accelBoost',  icon:'⚡',  name:'Motor reforzado',   desc:'+40% aceleración esta run',              color:'#ffaa00', apply:()=>{ CONFIG.ACCELERATION *= 1.4; } },
-    { id:'healRun',     icon:'❤️',  name:'Regeneración',      desc:'+30 HP ahora y +5 HP por oleada',        color:'#22c55e', apply:()=>{ gameState.hp = Math.min(gameState.maxHp, gameState.hp + 30); gameState._regenPerWave = (gameState._regenPerWave||0) + 5; } },
-    { id:'shieldRun',   icon:'🛡️',  name:'Escudo de oleada',  desc:'Escudo instantáneo 20 segundos',         color:'#00ccff', apply:()=>{ gameState.hasShield=true; gameState.powerups.set('shield', Date.now()+20000); updatePowerupIcons(); } },
-    { id:'magnetRun',   icon:'🧲',  name:'Imán permanente',   desc:'Atracción de monedas esta run',          color:'#ffdd00', apply:()=>{ gameState.hasMagnet=true; gameState.powerups.set('magnet', Date.now()+999999); updatePowerupIcons(); } },
-    { id:'coinMultRun', icon:'💰',  name:'Lluvia de monedas', desc:'x2 monedas por kill esta run',           color:'#ffd700', apply:()=>{ gameState._runCoinMult = (gameState._runCoinMult||1) * 2; } },
-    { id:'nitroRun',    icon:'🚀',  name:'Nitro infinito',    desc:'Nitro se recarga x3 más rápido',         color:'#a855f7', apply:()=>{ gameState._nitroRechargeBoost = (gameState._nitroRechargeBoost||1) * 3; } },
-    { id:'damageRun',   icon:'💥',  name:'Arma de oleada',    desc:'Arma activa durante 30 segundos',        color:'#ff3344', apply:()=>{ gameState.hasWeapon=true; gameState.powerups.set('weapon', Date.now()+30000); updatePowerupIcons(); } },
-    { id:'comboRun',    icon:'🔥',  name:'Combo eterno',      desc:'El combo dura 2x más tiempo',            color:'#ff6b35', apply:()=>{ gameState._comboTimeBonus = true; } },
-    { id:'maxHpRun',    icon:'💪',  name:'Armadura de acero', desc:'+50 HP máximo esta run',                  color:'#6366f1', apply:()=>{ gameState.maxHp += 50; gameState.hp = Math.min(gameState.maxHp, gameState.hp + 50); } },
-    { id:'droneRun',    icon:'🚁',  name:'Dron de apoyo',     desc:'Dron activo durante 40 segundos',        color:'#8844ff', apply:()=>{ gameState.hasDrone=true; gameState.powerups.set('drone', Date.now()+40000); createDrone(); updatePowerupIcons(); } },
-    { id:'minesRun',    icon:'💣',  name:'Arsenal de minas',  desc:'+5 minas extra',                         color:'#cc3300', apply:()=>{ gameState.mineCount = Math.min(9, gameState.mineCount + 5); updateMineHUD(); } },
+    { id:'speedBoost',  icon:'🏎️', name:'Turbo permanente',   desc:'+20% velocidad máxima esta run',          color:'#ff6600', apply:()=>{ CONFIG.MAX_SPEED *= 1.20; } },
+    { id:'accelBoost',  icon:'⚡',  name:'Motor reforzado',    desc:'+40% aceleración esta run',               color:'#ffaa00', apply:()=>{ CONFIG.ACCELERATION *= 1.4; } },
+    { id:'healRun',     icon:'❤️',  name:'Regeneración',       desc:'+30 HP ahora y +5 HP por oleada',         color:'#22c55e', apply:()=>{ gameState.hp = Math.min(gameState.maxHp, gameState.hp + 30); gameState._regenPerWave = (gameState._regenPerWave||0) + 5; } },
+    { id:'shieldRun',   icon:'🛡️',  name:'Escudo de oleada',   desc:'Escudo instantáneo 20 segundos',          color:'#00ccff', apply:()=>{ gameState.hasShield=true; gameState.powerups.set('shield', Date.now()+20000); updatePowerupIcons(); } },
+    { id:'magnetRun',   icon:'🧲',  name:'Imán permanente',    desc:'Atracción de monedas esta run',           color:'#ffdd00', apply:()=>{ gameState.hasMagnet=true; gameState.powerups.set('magnet', Date.now()+999999); updatePowerupIcons(); } },
+    { id:'coinMultRun', icon:'💰',  name:'Lluvia de monedas',  desc:'x2 monedas por kill esta run',            color:'#ffd700', apply:()=>{ gameState._runCoinMult = (gameState._runCoinMult||1) * 2; } },
+    { id:'nitroRun',    icon:'🚀',  name:'Nitro infinito',     desc:'Nitro se recarga x3 más rápido',          color:'#a855f7', apply:()=>{ gameState._nitroRechargeBoost = (gameState._nitroRechargeBoost||1) * 3; } },
+    { id:'damageRun',   icon:'🔫',  name:'Arma automática',    desc:'Arma activa 30 segundos',                 color:'#ff3344', apply:()=>{ gameState.hasWeapon=true; gameState.powerups.set('weapon', Date.now()+30000); updatePowerupIcons(); } },
+    { id:'comboRun',    icon:'🔥',  name:'Combo eterno',       desc:'El combo dura 2x más tiempo',             color:'#ff6b35', apply:()=>{ gameState._comboTimeBonus = true; } },
+    { id:'maxHpRun',    icon:'💪',  name:'Armadura de acero',  desc:'+50 HP máximo esta run',                  color:'#6366f1', apply:()=>{ gameState.maxHp += 50; gameState.hp = Math.min(gameState.maxHp, gameState.hp + 50); } },
+    { id:'droneRun',    icon:'🚁',  name:'Dron de apoyo',      desc:'Dron activo durante 40 segundos',         color:'#8844ff', apply:()=>{ gameState.hasDrone=true; gameState.powerups.set('drone', Date.now()+40000); createDrone(); updatePowerupIcons(); } },
+    { id:'minesRun',    icon:'💣',  name:'Arsenal de minas',   desc:'+5 minas extra',                          color:'#cc3300', apply:()=>{ gameState.mineCount = Math.min(9, gameState.mineCount + 5); updateMineHUD(); } },
+    // ═══ NUEVOS BOOSTS ═══
+    { id:'vampire',     icon:'🩸',  name:'Modo Vampiro',       desc:'Cada kill cura +3 HP',                    color:'#880022', apply:()=>{ gameState._vampireMode = true; } },
+    { id:'doubleDmg',   icon:'💥',  name:'Balas Explosivas',   desc:'Balas hacen 2x daño y explotan',          color:'#ff2200', apply:()=>{ gameState._doubleBulletDmg = true; } },
+    { id:'ricochet',    icon:'🔄',  name:'Balas Rebotadoras',  desc:'Las balas rebotan hasta 2 zombies extra',  color:'#00aaff', apply:()=>{ gameState._bulletRicochet = true; } },
+    { id:'adrenaline',  icon:'💉',  name:'Adrenalina',         desc:'A menos HP, más velocidad (hasta x1.8)',   color:'#ff0066', apply:()=>{ gameState._adrenalineMode = true; } },
+    { id:'fireTrail',   icon:'🔥',  name:'Estela de Fuego',    desc:'Rastro de fuego que daña zombies',         color:'#ff5500', apply:()=>{ gameState._fireTrail = true; } },
+    { id:'freezeRun',   icon:'❄️',  name:'Orbe Glacial',       desc:'Congela zombies cercanos cada 8s',         color:'#88ddff', apply:()=>{ gameState._freezeOrb = true; gameState._freezeOrbTimer = 0; } },
   ];
-
-  // ========== TIPO BOSS ==========
-  const BOSS_TYPE = { name:'BOSS', color:0xff0000, speed:0.55, damage:40, points:500, coins:50, size:2.8 };
 
   // ========== TIENDA ==========
   const SHOP_COLORS = [
@@ -124,36 +132,29 @@
     mission:null,
     powerups: new Map(),
     hasShield:false, hasTurbo:false, hasMagnet:false, hasWeapon:false,
-    hasRamp:false, hasDrone:false,
-    waveConfig:null,
-    waveEvent:null,
-    eventRollWave:0,
-    // === NUEVAS MECÁNICAS ===
-    driftMeter:0,
-    driftMeterReady:false,
-    shockwaveCooldown:0,
+    hasRamp:false, hasDrone:false, hasFreeze:false, hasRepair:false, hasLaser:false,
+    waveConfig:null, waveEvent:null, eventRollWave:0,
+    driftMeter:0, driftMeterReady:false, shockwaveCooldown:0,
     mineCount:0,
-    zoneActive:null,
-    zoneTimer:0,
-    zoneCooldown:0,
-    // === BOSS ===
-    bossActive:false,
-    bossZombie:null,
-    bossMaxHp:0,
-    // === DIFICULTAD ===
-    difficulty: 'normal',
-    // === ROGUELIKE ===
+    zoneActive:null, zoneTimer:0, zoneCooldown:0,
+    // === OLEADA EXTREMA (reemplaza boss) ===
+    extremeWaveActive: false,
+    extremeWaveTimer: 0,
+    extremeWaveDuration: 60,
+    // === ARMA AUTO ===
+    weaponAutoTimer: 0,
+    laserBeam: null,
+    laserTimer: 0,
+    // === ROGUELIKE FLAGS ===
     runUpgrades: [],
-    _regenPerWave: 0,
-    _runCoinMult: 1,
-    _nitroRechargeBoost: 1,
-    _comboTimeBonus: false,
-    // === STATS ===
-    playTimeSeconds: 0,
-    distanceMeters: 0,
-    bossKills: 0,
-    // === ESTADO ROGUELIKE ===
+    _regenPerWave:0, _runCoinMult:1, _nitroRechargeBoost:1, _comboTimeBonus:false,
+    _vampireMode:false, _doubleBulletDmg:false, _bulletRicochet:false,
+    _adrenalineMode:false, _fireTrail:false, _fireTrailTimer:0,
+    _freezeOrb:false, _freezeOrbTimer:0,
     awaitingUpgrade: false,
+    // === STATS ===
+    playTimeSeconds:0, distanceMeters:0, bossKills:0,
+    difficulty:'normal',
   };
 
   // Estado del coche con física real
@@ -225,7 +226,7 @@
     const u = playerData.upgrades;
     gameState.maxHp = 100 + (u.maxHealth.level * u.maxHealth.bonus);
     CONFIG.MAX_SPEED = 0.48 + (u.speed.level * u.speed.bonus);
-    CONFIG.ACCELERATION = 0.018; // resetear al base en cada nueva run
+    CONFIG.ACCELERATION = 0.018; // reset base entre runs
   }
 
   // ========== 🎮 CALIDAD GRÁFICA ==========
@@ -2256,41 +2257,85 @@
   }, {passive:false});
   window.addEventListener('touchend', ()=>{ keys['w']=false; mouseActive=false; });
 
-  function shootBullet(){
+  function shootBullet(targetOverride){
     if(!car || !gameState.hasWeapon) return;
-
     const now = performance.now();
     if(now - lastShotTime < WEAPON_COOLDOWN_MS) return;
     lastShotTime = now;
+
+    // === AUTO-AIM: buscar el zombie más cercano que SE ACERCA al coche ===
+    let target = targetOverride || null;
+    if(!target){
+      let bestScore = Infinity;
+      zombies.forEach(z=>{
+        const dist = z.position.distanceTo(car.position);
+        if(dist < 45){
+          // Priorizar los más cercanos y los que vienen de frente
+          const dir = new THREE.Vector3().subVectors(z.position, car.position).normalize();
+          const carFwd = new THREE.Vector3(0,0,-1).applyQuaternion(car.quaternion);
+          const dot = dir.dot(carFwd); // positivo = delante del coche
+          const score = dist - (dot > 0 ? 8 : 0); // bonus si está delante
+          if(score < bestScore){ bestScore = score; target = z; }
+        }
+      });
+    }
 
     playShootSfx();
     markTutorialStep('weapon');
 
     const bullet = new THREE.Group();
     const coreMat = new THREE.MeshStandardMaterial({ color:0xfff08a, emissive:0xffdd55, emissiveIntensity:1.2 });
-    const core = new THREE.Mesh(new THREE.SphereGeometry(0.14, 10, 10), coreMat);
+    const core = new THREE.Mesh(new THREE.SphereGeometry(0.14, 8, 8), coreMat);
     bullet.add(core);
-
     const glowMat = new THREE.MeshBasicMaterial({ color:0xff6600, transparent:true, opacity:0.65 });
-    const glow = new THREE.Mesh(new THREE.SphereGeometry(0.23, 8, 8), glowMat);
+    const glow = new THREE.Mesh(new THREE.SphereGeometry(0.23, 6, 6), glowMat);
     bullet.add(glow);
 
-    const dir = new THREE.Vector3(0,0,-1).applyQuaternion(car.quaternion).normalize();
+    let dir;
+    if(target){
+      // Dirección directa al objetivo (predictive aim: apunta un poco adelante)
+      const leadPos = target.position.clone();
+      const dist = leadPos.distanceTo(car.position);
+      if(target.userData.speed){
+        const tDir = new THREE.Vector3().subVectors(car.position, target.position).normalize();
+        leadPos.addScaledVector(tDir, -target.userData.speed * dist * 0.4);
+      }
+      dir = new THREE.Vector3().subVectors(leadPos, car.position).normalize();
+    } else {
+      dir = new THREE.Vector3(0,0,-1).applyQuaternion(car.quaternion).normalize();
+    }
+
     const muzzleOffset = dir.clone().multiplyScalar(2.1);
     bullet.position.copy(car.position).add(muzzleOffset);
     bullet.position.y = 1.05;
 
+    const bulletSpeed = gameState._doubleBulletDmg ? 3.8 : 2.6;
     bullet.userData = {
-      velocity: dir.multiplyScalar(2.45),
-      life: 1.6,
-      trailTimer: 0
+      velocity: dir.multiplyScalar(bulletSpeed),
+      life: 2.0,
+      trailTimer: 0,
+      damage: gameState._doubleBulletDmg ? 2 : 1,
+      ricochetLeft: gameState._bulletRicochet ? 2 : 0,
+      target: target,
     };
 
     scene.add(bullet);
     bullets.push(bullet);
-
-    // Fogonazo al disparar
     spawnDust(bullet.position.clone(), 3);
+  }
+
+  // === DISPARO AUTOMÁTICO de la pistola (llamado desde el loop) ===
+  let lastAutoShotTime = 0;
+  const AUTO_WEAPON_COOLDOWN = 220; // ms entre disparos automáticos
+
+  function updateWeaponAuto(){
+    if(!gameState.hasWeapon || !gameState.running || gameState.paused) return;
+    const now = performance.now();
+    if(now - lastAutoShotTime < AUTO_WEAPON_COOLDOWN) return;
+    // Sólo disparar si hay zombies cerca
+    if(zombies.length === 0) return;
+    lastAutoShotTime = now;
+    shootBullet(); // auto-aim
   }
 
   function getSteeringProfile(){
@@ -2551,12 +2596,20 @@
       const zPos = z.position.clone();
       const dist = zPos.distanceTo(carPos);
 
-      // Movimiento hacia el coche
-      if(dist > 2){
+      // Movimiento hacia el coche (respetar congelación)
+      const isFrozen = z.userData._frozen && Date.now() < z.userData._frozen;
+      if(!isFrozen && dist > 2){
         const dir = new THREE.Vector3().subVectors(carPos, zPos).normalize();
         const wobble = Math.sin((performance.now()+z.userData.wobble)/300)*0.22;
         z.position.x += (dir.x + wobble*0.025) * z.userData.speed * speedMult * dt * 42;
         z.position.z += dir.z * z.userData.speed * speedMult * dt * 42;
+      } else if(isFrozen && z.userData._frozenColorSet !== z.userData._frozen) {
+        // Marcar que ya pintamos el color (evitar repintar cada frame)
+        z.userData._frozenColorSet = z.userData._frozen;
+      } else if(!isFrozen && z.userData._frozenColorSet) {
+        // Descongelar: restaurar color original
+        z.userData._frozenColorSet = null;
+        z.traverse(c=>{ if(c.isMesh && c.material && c.userData.origColor) c.material.color.setHex(c.userData.origColor); });
       }
 
       // Animación de caminar (brazos y cuerpo)
@@ -2706,7 +2759,7 @@
       case 'weapon':
         gameState.hasWeapon=true;
         gameState.powerups.set('weapon', Date.now()+type.duration);
-        inGameMessage('¡Arma activada! 🔫 (Click/E)', 2000); updatePowerupIcons(); break;
+        inGameMessage('🔫 ¡Arma AUTO activa! Apunta sola a zombies', 2000); updatePowerupIcons(); break;
       case 'ramp':
         gameState.hasRamp=true;
         gameState.powerups.set('ramp', Date.now()+type.duration);
@@ -2721,6 +2774,25 @@
         gameState.mineCount = Math.min(gameState.mineCount+3, 9);
         inGameMessage(`💣 +3 Minas (F para soltar) — Total: ${gameState.mineCount}`, 2000);
         updateMineHUD(); break;
+      // ═══ NUEVOS POWER-UPS ═══
+      case 'freeze':
+        gameState.hasFreeze=true;
+        gameState.powerups.set('freeze', Date.now()+type.duration);
+        // Congelar todos los zombies en pantalla durante 3s
+        zombies.forEach(z=>{ z.userData._frozen = Date.now()+3000; z.traverse(c=>{ if(c.isMesh && c.material) c.material.color.setHex(0x88ddff); }); });
+        inGameMessage('❄️ ¡Congelación! Zombies paralizados 3s', 2000); updatePowerupIcons(); break;
+      case 'repair':
+        gameState.hasRepair=true;
+        gameState.powerups.set('repair', Date.now()+type.duration);
+        // Regeneración continua
+        inGameMessage('🔧 ¡Reparación activa! +2 HP/s durante 10s', 2000); updatePowerupIcons(); break;
+      case 'laser':
+        gameState.hasLaser=true;
+        gameState.powerups.set('laser', Date.now()+type.duration);
+        inGameMessage('🔆 ¡Láser activo! Destruye zombies en línea recta', 2000); updatePowerupIcons(); break;
+      case 'etrap':
+        // Trampa eléctrica: explota en área al instante
+        activateElectricTrap(); break;
     }
   }
 
@@ -3053,40 +3125,232 @@
       b.userData.life-=dt;
       b.userData.trailTimer += dt;
 
-      if(b.userData.trailTimer > 0.025){
+      if(b.userData.trailTimer > 0.022){
         b.userData.trailTimer = 0;
+        const isDrone = b.userData.isDroneBullet;
         const trail = new THREE.Mesh(
-          new THREE.SphereGeometry(0.08, 6, 6),
-          new THREE.MeshBasicMaterial({ color:0xff9933, transparent:true, opacity:0.75 })
+          new THREE.SphereGeometry(0.08, 4, 4),
+          new THREE.MeshBasicMaterial({ color: isDrone ? 0xbb66ff : 0xff9933, transparent:true, opacity:0.75 })
         );
         trail.position.copy(b.position);
-        trail.userData = { velocity: new THREE.Vector3(), life: 0.2, gravity: 0 };
+        trail.userData = { velocity: new THREE.Vector3(), life: 0.18, gravity: 0 };
         scene.add(trail);
         particles.push(trail);
       }
 
       if(b.userData.life<=0){ scene.remove(b); bullets.splice(i,1); continue; }
 
+      let hit = false;
       for(let j=zombies.length-1; j>=0; j--){
         if(b.position.distanceTo(zombies[j].position)<1.7){
-          zombies[j].userData.health--;
-          if(zombies[j].userData.health<=0){
-            spawnExplosion(zombies[j].position.clone());
-            killZombie(zombies[j],j);
+          const dmg = b.userData.damage || 1;
+          zombies[j].userData.health -= dmg;
+
+          // Modo vampiro: curar al disparar
+          if(gameState._vampireMode){
+            gameState.hp = Math.min(gameState.maxHp, gameState.hp + 3);
+          }
+
+          if(zombies[j].userData.health <= 0){
+            // Bala explosiva: mini-explosión al matar
+            if(gameState._doubleBulletDmg){
+              spawnExplosion(zombies[j].position.clone());
+              // Dañar zombies en radio 4
+              for(let k=zombies.length-1;k>=0;k--){
+                if(k!==j && zombies[k].position.distanceTo(zombies[j].position)<4){
+                  zombies[k].userData.health--;
+                  if(zombies[k].userData.health<=0){ killZombie(zombies[k],k); if(k<j) j--; }
+                }
+              }
+            }
+            killZombie(zombies[j], j);
           } else {
             playCollisionSfx();
+            // Parpadeo de daño (tinte rojo momentáneo)
+            zombies[j].traverse(c=>{ if(c.isMesh && c.material) c.material.emissiveIntensity = 0.8; });
+            setTimeout(()=>{
+              if(zombies[j]) zombies[j].traverse(c=>{ if(c.isMesh && c.material) c.material.emissiveIntensity = 0; });
+            }, 80);
           }
 
           spawnDust(b.position.clone(), 4);
-          scene.remove(b);
-          bullets.splice(i,1);
+
+          // Rebote: la bala sigue hacia el siguiente zombie
+          if(b.userData.ricochetLeft > 0){
+            b.userData.ricochetLeft--;
+            // Buscar siguiente zombie más cercano
+            let nextTarget = null, nextDist = Infinity;
+            zombies.forEach((z,zi)=>{
+              if(zi!==j){
+                const d = z.position.distanceTo(b.position);
+                if(d<nextDist){ nextDist=d; nextTarget=z; }
+              }
+            });
+            if(nextTarget && nextDist < 25){
+              const newDir = new THREE.Vector3().subVectors(nextTarget.position, b.position).normalize();
+              b.userData.velocity = newDir.multiplyScalar(b.userData.velocity.length());
+              b.userData.life = 1.0;
+              hit = false; // no eliminar bala
+            } else {
+              hit = true;
+            }
+          } else {
+            hit = true;
+          }
           break;
         }
       }
+      if(hit){ scene.remove(b); bullets.splice(i,1); }
     }
   }
 
-  // ========== PARTÍCULAS ==========
+  // ========== ⚡ TRAMPA ELÉCTRICA ==========
+  function activateElectricTrap(){
+    if(!car) return;
+    const pos = car.position.clone();
+    // Onda de choque eléctrica en radio 12
+    const affected = [];
+    for(let i=zombies.length-1;i>=0;i--){
+      if(zombies[i].position.distanceTo(pos) < 12){
+        affected.push({z:zombies[i], i});
+      }
+    }
+    // Matar/dañar zombies en el radio
+    affected.sort((a,b)=>b.i-a.i).forEach(({z,i})=>{
+      z.userData.health = 0;
+      spawnExplosion(z.position.clone());
+      killZombie(z, i);
+    });
+    // Flash visual amarillo
+    const flashGeom = new THREE.SphereGeometry(12, 12, 12);
+    const flashMat = new THREE.MeshBasicMaterial({ color:0xffee00, transparent:true, opacity:0.45, wireframe:true });
+    const flash = new THREE.Mesh(flashGeom, flashMat);
+    flash.position.copy(pos); flash.position.y = 1;
+    scene.add(flash);
+    flash.userData = { life:0.4, velocity:new THREE.Vector3(), gravity:0 };
+    particles.push(flash);
+    inGameMessage(`⚡ ¡TRAMPA ELÉCTRICA! ${affected.length} zombies destruidos`, 2200);
+    cameraShake(0.35, 400);
+    playSound(200, 0.4, 'sawtooth', 0.35);
+    setTimeout(()=>playSound(400, 0.3, 'square', 0.25), 100);
+  }
+
+  // ========== 🔆 LÁSER (disparo continuo al frente) ==========
+  function updateLaser(dt){
+    if(!gameState.hasLaser || !car || !gameState.running || gameState.paused) return;
+    gameState.laserTimer -= dt;
+    if(gameState.laserTimer > 0.08) return;
+    gameState.laserTimer = 0.1;
+
+    const carFwd = new THREE.Vector3(0,0,-1).applyQuaternion(car.quaternion);
+    const origin = car.position.clone().add(carFwd.clone().multiplyScalar(2));
+    origin.y = 1.1;
+
+    // Destruir zombies en la línea del láser
+    for(let i=zombies.length-1;i>=0;i--){
+      const z = zombies[i];
+      const toZ = new THREE.Vector3().subVectors(z.position, origin);
+      const dist = toZ.length();
+      if(dist > 28) continue;
+      const dot = toZ.normalize().dot(carFwd);
+      if(dot > 0.92){ // ángulo estrecho ~23°
+        z.userData.health -= 3 * dt;
+        if(z.userData.health <= 0) killZombie(z, i);
+        else {
+          z.traverse(c=>{ if(c.isMesh && c.material) c.material.emissiveIntensity = 1.2; });
+          setTimeout(()=>{ if(z) z.traverse(c=>{ if(c.isMesh && c.material) c.material.emissiveIntensity = 0; }); }, 60);
+        }
+      }
+    }
+
+    // Traza visual del láser
+    const laserTrail = new THREE.Mesh(
+      new THREE.SphereGeometry(0.07, 5, 5),
+      new THREE.MeshBasicMaterial({ color:0xff44ff, transparent:true, opacity:0.9 })
+    );
+    laserTrail.position.copy(origin).addScaledVector(carFwd, Math.random()*20+2);
+    laserTrail.position.y = 1.1;
+    laserTrail.userData = { velocity:new THREE.Vector3(), life:0.12, gravity:0 };
+    scene.add(laserTrail);
+    particles.push(laserTrail);
+  }
+
+  // ========== 🔥 ESTELA DE FUEGO (roguelike) ==========
+  function updateFireTrail(dt){
+    if(!gameState._fireTrail || !car || !gameState.running || gameState.paused) return;
+    gameState._fireTrailTimer -= dt;
+    if(gameState._fireTrailTimer > 0) return;
+    gameState._fireTrailTimer = 0.12;
+
+    // Dejar partícula de fuego en la posición del coche
+    const p = new THREE.Mesh(
+      new THREE.SphereGeometry(0.4+Math.random()*0.3, 5, 5),
+      new THREE.MeshBasicMaterial({ color: Math.random()>0.5 ? 0xff4400 : 0xff8800, transparent:true, opacity:0.8 })
+    );
+    p.position.copy(car.position);
+    p.position.y = 0.3;
+    p.userData = { velocity: new THREE.Vector3((Math.random()-0.5)*0.3, 0.8, (Math.random()-0.5)*0.3), life:0.8, gravity:0, isFire:true };
+    scene.add(p);
+    particles.push(p);
+
+    // Dañar zombies que pasen por la estela
+    zombies.forEach((z,i)=>{
+      if(z.position.distanceTo(car.position) < 2.5){
+        z.userData.health -= 2 * dt * 10;
+        if(z.userData.health<=0) killZombie(z,i);
+      }
+    });
+  }
+
+  // ========== ❄️ ORBE GLACIAL (roguelike) ==========
+  function updateFreezeOrb(dt){
+    if(!gameState._freezeOrb || !car || !gameState.running || gameState.paused) return;
+    gameState._freezeOrbTimer -= dt;
+    if(gameState._freezeOrbTimer > 0) return;
+    gameState._freezeOrbTimer = 8; // cada 8 segundos
+
+    // Congelar zombies en radio 10
+    let frozen = 0;
+    zombies.forEach(z=>{
+      if(z.position.distanceTo(car.position) < 10){
+        z.userData._frozen = Date.now() + 2500;
+        z.traverse(c=>{ if(c.isMesh && c.material) c.material.color.setHex(0x88ddff); });
+        frozen++;
+      }
+    });
+    if(frozen > 0){
+      inGameMessage(`❄️ ¡Orbe Glacial! ${frozen} zombies congelados`, 1800);
+      // Visual: esfera de hielo pulsante
+      const orb = new THREE.Mesh(
+        new THREE.SphereGeometry(10, 10, 10),
+        new THREE.MeshBasicMaterial({ color:0x88ddff, transparent:true, opacity:0.18, wireframe:true })
+      );
+      orb.position.copy(car.position); orb.position.y=1;
+      orb.userData = { velocity:new THREE.Vector3(), life:0.5, gravity:0 };
+      scene.add(orb); particles.push(orb);
+      playSound(600, 0.25, 'sine', 0.3);
+    }
+  }
+
+  // ========== 💉 ADRENALINA (roguelike) ==========
+  function applyAdrenalineEffect(){
+    if(!gameState._adrenalineMode) return;
+    const hpPct = gameState.hp / gameState.maxHp;
+    // A 20% HP → +80% velocidad. A 100% HP → sin bonus
+    const bonus = Math.max(0, (1 - hpPct) * 0.8);
+    CONFIG.MAX_SPEED = (0.48 + (playerData.upgrades.speed.level * 0.05)) * (1 + bonus);
+  }
+
+  // ========== 🔧 REPARACIÓN CONTINUA ==========
+  let _repairTimer = 0;
+  function updateRepair(dt){
+    if(!gameState.hasRepair || !gameState.running || gameState.paused) return;
+    _repairTimer += dt;
+    if(_repairTimer >= 0.5){
+      _repairTimer = 0;
+      gameState.hp = Math.min(gameState.maxHp, gameState.hp + 1);
+    }
+  }
   function updateParticles(dt){
     for(let i=particles.length-1; i>=0; i--){
       const p=particles[i];
@@ -3453,18 +3717,25 @@
       updateCarPhysics(dt);
       checkZombies(dt, cfg.zombieSpeedMult);
       checkPowerups(dt);
-      updateCoins(dt); // 💰 Actualizar monedas
+      updateCoins(dt);
       updateBullets(dt);
       updateParticles(dt);
       updatePowerups(dt);
-      updateMines(dt);         // 💣 Minas
-      updateDrone(dt);         // 🚁 Dron
-      updateZone(dt);          // 🌍 Zona activa
+      updateMines(dt);
+      updateDrone(dt);
+      updateZone(dt);
       if(gameState.zoneCooldown > 0) gameState.zoneCooldown -= dt;
-      maybeStartZone();        // Intentar iniciar zona
-      updateCarAura(); // ✨ Actualizar aura visual
-      updateBossState(); // 👹 Boss
-      updateStatsHUD(dt); // 📊 Stats
+      maybeStartZone();
+      updateCarAura();
+      updateStatsHUD(dt);
+      // ═══ NUEVOS EFECTOS ═══
+      updateWeaponAuto();       // 🔫 Pistola automática
+      updateLaser(dt);          // 🔆 Láser continuo
+      updateFireTrail(dt);      // 🔥 Estela de fuego
+      updateFreezeOrb(dt);      // ❄️ Orbe glacial
+      updateRepair(dt);         // 🔧 Reparación
+      applyAdrenalineEffect();  // 💉 Adrenalina
+      updateExtremeWave(dt);    // 🔴 Oleada extrema
 
       // === Humo de daño al coche ===
       if(gameState.hp < 50 && Math.random() < 0.08) spawnCarDamageSmoke();
@@ -3478,56 +3749,36 @@
       if(gameState.combo>0){
         gameState.comboTimer+=dt;
         const comboLimit = gameState._comboTimeBonus ? 6 : 3;
-        if(gameState.comboTimer>comboLimit){ 
-          gameState.combo=0; 
-          gameState.comboTimer=0; 
-        }
-        
-        // ✨ Mensajes espectaculares de combo
-        if(gameState.combo === 5){
-          showBigMessage('🔥 ¡COMBO x5!', '#ff6600');
-        } else if(gameState.combo === 10){
-          showBigMessage('💥 ¡COMBO x10! ¡INCREÍBLE!', '#ff0000');
-        } else if(gameState.combo === 15){
-          showBigMessage('⚡ ¡COMBO x15! ¡IMPARABLE!', '#ffdd00');
-        } else if(gameState.combo === 20){
-          showBigMessage('👑 ¡COMBO x20! ¡LEYENDA!', '#00ffff');
-        }
+        if(gameState.comboTimer>comboLimit){ gameState.combo=0; gameState.comboTimer=0; }
+        if(gameState.combo === 5)  showBigMessage('🔥 ¡COMBO x5!', '#ff6600');
+        else if(gameState.combo === 10) showBigMessage('💥 ¡COMBO x10! ¡INCREÍBLE!', '#ff0000');
+        else if(gameState.combo === 15) showBigMessage('⚡ ¡COMBO x15! ¡IMPARABLE!', '#ffdd00');
+        else if(gameState.combo === 20) showBigMessage('👑 ¡COMBO x20! ¡LEYENDA!', '#00ffff');
       }
 
-      // Oleadas con cambio de atmósfera
-      if(gameState.zombiesKilledThisWave>=gameState.waveConfig.killTarget && !gameState.bossActive){
-        // Regeneración por oleada (roguelike)
+      // ═══ CAMBIO DE OLEADA (sin boss, con oleada extrema cada 5) ═══
+      if(gameState.zombiesKilledThisWave >= gameState.waveConfig.killTarget && !gameState.extremeWaveActive){
         if(gameState._regenPerWave > 0){
           gameState.hp = Math.min(gameState.maxHp, gameState.hp + gameState._regenPerWave);
         }
-        
         gameState.wave++;
         updateDailyMissionProgress('wave', 1);
-        gameState.zombiesKilledThisWave=0;
-        
-        // ✨ Cambiar atmósfera cada oleada
+        gameState.zombiesKilledThisWave = 0;
         const newAtmosphere = getAtmosphereForWave(gameState.wave);
         changeAtmosphere(newAtmosphere);
 
-        // === BOSS cada 5 oleadas ===
         if(gameState.wave % 5 === 0){
-          setTimeout(()=>{ spawnBoss(); }, 1500);
-          inGameMessage(`🌊 ¡OLEADA ${gameState.wave}! 👹 ¡BOSS EN CAMINO!`, 3000);
-          playPowerupSfx();
+          // 🔴 OLEADA EXTREMA cada 5 oleadas
+          startExtremeWave();
         } else {
-          // === MEJORA ROGUELIKE entre oleadas ===
           showWaveUpgradePanel(gameState.wave);
           inGameMessage(`🌊 ¡Oleada ${gameState.wave}!`, 1500);
           playPowerupSfx();
         }
-        
         assignMission();
       }
 
       if(gameState.hp<=0){ gameState.running=false; showGameOver(); }
-
-      // Reciclar mundo infinito
       recycleWorld();
     }
 
@@ -3622,12 +3873,15 @@
     gameState.driftMeter=0; gameState.driftMeterReady=false; gameState.shockwaveCooldown=0;
     gameState.mineCount=0;
     gameState.zoneActive=null; gameState.zoneTimer=0; gameState.zoneCooldown=0;
-    // Resetear boss
-    gameState.bossActive=false; gameState.bossZombie=null; gameState.bossMaxHp=0;
-    hideBossBar();
+    // Resetear oleada extrema
+    gameState.extremeWaveActive=false; gameState.extremeWaveTimer=0; gameState._extremeSpawnTimer=0;
+    hideExtremeWaveHUD();
     // Resetear roguelike
     gameState.runUpgrades=[];
     gameState._regenPerWave=0; gameState._runCoinMult=1; gameState._nitroRechargeBoost=1; gameState._comboTimeBonus=false;
+    gameState._vampireMode=false; gameState._doubleBulletDmg=false; gameState._bulletRicochet=false;
+    gameState._adrenalineMode=false; gameState._fireTrail=false; gameState._fireTrailTimer=0;
+    gameState._freezeOrb=false; gameState._freezeOrbTimer=0;
     gameState.awaitingUpgrade=false;
     // Resetear stats de run
     gameState.playTimeSeconds=0; gameState.distanceMeters=0; gameState.bossKills=0;
@@ -3701,8 +3955,8 @@
     overlayGameOver.style.display='block';
     overlayMenu.style.display='none'; overlayShop.style.display='none';
     elements.btnRestart.style.display='none';
-    // Ocultar boss bar si estaba activa
-    hideBossBar();
+    // Ocultar HUDs de evento
+    hideExtremeWaveHUD();
     document.getElementById('pauseScreen').style.display='none';
     document.getElementById('waveUpgradePanel').style.display='none';
   }
@@ -3744,123 +3998,129 @@
     });
   })();
 
-  // ========== 👹 SISTEMA DE BOSS ==========
-  function spawnBoss(){
-    if(gameState.bossActive || !car) return;
-    gameState.bossActive = true;
-    
-    const boss = new THREE.Group();
-    const size = BOSS_TYPE.size;
-    
-    // Cuerpo principal masivo
-    const bodyMat = new THREE.MeshStandardMaterial({
-      color: BOSS_TYPE.color, roughness:0.5, metalness:0.3,
-      emissive: 0xff0000, emissiveIntensity:0.4
-    });
-    const body = new THREE.Mesh(new THREE.BoxGeometry(0.7*size, 1.4*size, 0.5*size), bodyMat);
-    body.position.y = 0.7*size;
-    body.castShadow = true;
-    boss.add(body);
-    
-    // Cabeza
-    const headMat = new THREE.MeshStandardMaterial({ color:0xcc0000, roughness:0.4, emissive:0xff2200, emissiveIntensity:0.6 });
-    const head = new THREE.Mesh(new THREE.BoxGeometry(0.55*size, 0.55*size, 0.55*size), headMat);
-    head.position.y = 1.7*size;
-    head.castShadow = true;
-    boss.add(head);
-    
-    // Ojos brillantes (terror visual)
-    const eyeMat = new THREE.MeshBasicMaterial({ color:0xffff00 });
-    const eyeGeom = new THREE.SphereGeometry(0.08*size, 8, 8);
-    const eyeL = new THREE.Mesh(eyeGeom, eyeMat); eyeL.position.set(-0.12*size, 1.75*size, 0.28*size); boss.add(eyeL);
-    const eyeR = new THREE.Mesh(eyeGeom, eyeMat.clone()); eyeR.position.set(0.12*size, 1.75*size, 0.28*size); boss.add(eyeR);
-    
-    // Brazos enormes
-    const armGeom = new THREE.BoxGeometry(0.22*size, 1.0*size, 0.22*size);
-    const armL = new THREE.Mesh(armGeom, bodyMat.clone()); armL.position.set(-0.56*size, 0.9*size, 0); boss.add(armL);
-    const armR = new THREE.Mesh(armGeom, bodyMat.clone()); armR.position.set(0.56*size, 0.9*size, 0); boss.add(armR);
-    
-    // Luz de punto roja para aura de terror
-    const bossLight = new THREE.PointLight(0xff0000, 3, 12);
-    bossLight.position.set(0, 2, 0);
-    boss.add(bossLight);
-    
-    // Partículas de humo alrededor del boss (periódicas)
-    const totalHp = 30 + gameState.wave * 5;
-    
-    boss.position.set(
-      (Math.random()-0.5) * (CONFIG.ROAD_WIDTH - 4),
-      0,
-      car.position.z - 55 - Math.random()*10
-    );
-    
-    boss.userData = {
-      type: BOSS_TYPE,
-      speed: CONFIG.ZOMBIE_BASE_SPEED * BOSS_TYPE.speed * (DIFFICULTY_LEVELS[gameState.difficulty]?.speedMult || 1),
-      health: totalHp,
-      maxHealth: totalHp,
-      wobble: 0,
-      hitCooldown: 0,
-      isBoss: true,
-    };
-    
-    gameState.bossMaxHp = totalHp;
-    gameState.bossZombie = boss;
-    
-    scene.add(boss);
-    zombies.push(boss);
-    
-    showBossBar();
-    inGameMessage(`👹 ¡BOSS APARECIÓ! HP: ${totalHp}`, 3000);
-    cameraShake(0.4, 600);
-    playSound(80, 0.6, 'sawtooth', 0.5);
-    setTimeout(()=>playSound(60, 0.5, 'square', 0.4), 200);
-  }
-  
-  function showBossBar(){
-    const bar = document.getElementById('bossHealthBar');
-    if(bar){ bar.style.display='block'; updateBossBar(); }
-  }
-  
-  function hideBossBar(){
-    const bar = document.getElementById('bossHealthBar');
-    if(bar) bar.style.display='none';
-  }
-  
-  function updateBossBar(){
-    if(!gameState.bossActive || !gameState.bossZombie) return;
-    const pct = Math.max(0, gameState.bossZombie.userData.health / gameState.bossMaxHp * 100);
-    const fill = document.getElementById('bossHpFill');
-    const text = document.getElementById('bossHpText');
-    if(fill){
-      fill.style.width = pct + '%';
-      // Color cambia según HP: verde → naranja → rojo
-      if(pct > 60) fill.style.background = 'linear-gradient(90deg,#ff0022,#ff6600)';
-      else if(pct > 30) fill.style.background = 'linear-gradient(90deg,#ff6600,#ffaa00)';
-      else fill.style.background = 'linear-gradient(90deg,#ffaa00,#ffdd00)';
-    }
-    if(text) text.textContent = `👹 ${Math.ceil(pct)}% · ${Math.ceil(gameState.bossZombie.userData.health)}/${gameState.bossMaxHp}`;
-  }
-  
-  function onBossKilled(){
-    gameState.bossActive = false;
-    gameState.bossZombie = null;
-    gameState.bossKills = (gameState.bossKills||0) + 1;
-    hideBossBar();
-    
-    // Recompensas grandes
-    playerData.totalCoins += BOSS_TYPE.coins;
-    gameState.score += BOSS_TYPE.points * (DIFFICULTY_LEVELS[gameState.difficulty]?.scoreMult || 1);
-    gameState.hp = Math.min(gameState.maxHp, gameState.hp + 30); // curación al matar boss
-    
-    inGameMessage(`👹 ¡BOSS ELIMINADO! +${BOSS_TYPE.points} pts · +${BOSS_TYPE.coins} 💰 · +30 ❤️`, 3500);
+  // ========== 🔴 SISTEMA DE OLEADA EXTREMA (reemplaza al boss) ==========
+  // Cada 5 oleadas: 60s de supervivencia con hordas masivas, 2× velocidad, atmósfera roja
+
+  function startExtremeWave(){
+    if(gameState.extremeWaveActive) return;
+    gameState.extremeWaveActive = true;
+    gameState.extremeWaveTimer = gameState.extremeWaveDuration; // 60s
+
+    // Limpiar zombies normales y meter horda inicial
+    changeAtmosphere('night');
+    // Teñir cielo de rojo
+    if(scene.background) scene.background.setHex(0x330000);
+    if(scene.fog) scene.fog.color.setHex(0x330000);
+
+    inGameMessage(`🔴 ¡OLEADA EXTREMA! ¡Sobrevive ${gameState.extremeWaveDuration}s!`, 4000);
+    showBigMessage('🔴 OLEADA EXTREMA', '#ff0000');
     cameraShake(0.5, 800);
-    playSound(220, 0.6, 'triangle', 0.4);
-    setTimeout(()=>playSound(330, 0.5, 'triangle', 0.35), 150);
-    setTimeout(()=>playSound(440, 0.6, 'sine', 0.4), 300);
-    
-    // Panel de mejora roguelike tras el boss
-    setTimeout(()=>{ showWaveUpgradePanel(gameState.wave, true); }, 1000);
+    playSound(55, 0.7, 'sawtooth', 0.6);
+    setTimeout(()=>playSound(44, 0.6, 'square', 0.5), 250);
+    setTimeout(()=>playSound(66, 0.5, 'sawtooth', 0.4), 500);
+
+    // Activar HUD de cuenta regresiva
+    showExtremeWaveHUD();
+
+    // Spawn masivo inicial
+    for(let i=0;i<6;i++) setTimeout(()=>spawnExtremeZombie(), i*300);
+  }
+
+  function spawnExtremeZombie(){
+    if(!car || !gameState.extremeWaveActive) return;
+    // Alternar entre FAST, TANK, EXPLOSIVE con más frecuencia
+    const types = [ZOMBIE_TYPES.FAST, ZOMBIE_TYPES.FAST, ZOMBIE_TYPES.TANK, ZOMBIE_TYPES.EXPLOSIVE, ZOMBIE_TYPES.NORMAL];
+    const t = types[Math.floor(Math.random()*types.length)];
+    const diffMult = DIFFICULTY_LEVELS[gameState.difficulty]?.speedMult || 1.0;
+    // 2× velocidad durante oleada extrema
+    const speedBoost = 2.1;
+
+    const group = new THREE.Group();
+    const mat = new THREE.MeshStandardMaterial({ color:t.color, roughness:0.7, emissive:t.color, emissiveIntensity:0.35 });
+    const body = new THREE.Mesh(new THREE.BoxGeometry(0.5*t.size, 1.0*t.size, 0.35*t.size), mat);
+    body.position.y = 0.5*t.size; body.castShadow=true; group.add(body);
+    const head = new THREE.Mesh(new THREE.BoxGeometry(0.4*t.size,0.4*t.size,0.4*t.size), mat.clone());
+    head.position.y = 1.1*t.size; head.castShadow=true; group.add(head);
+    // Ojos rojos brillantes (señal de oleada extrema)
+    const eyeM = new THREE.MeshBasicMaterial({color:0xff0000});
+    [-0.08,0.08].forEach(ox=>{ const e=new THREE.Mesh(new THREE.SphereGeometry(0.05*t.size,6,6),eyeM.clone()); e.position.set(ox*t.size,1.14*t.size,0.21*t.size); group.add(e); });
+
+    const side = Math.random() < 0.5 ? -1 : 1;
+    group.position.set(side*(CONFIG.ROAD_WIDTH/2 - 1 - Math.random()*3), 0, car.position.z - 40 - Math.random()*20);
+    group.userData = {
+      type:t, speed: CONFIG.ZOMBIE_BASE_SPEED * t.speed * diffMult * speedBoost,
+      health: t.health, wobble:0, hitCooldown:0, isExtremeZombie:true,
+    };
+    scene.add(group);
+    zombies.push(group);
+  }
+
+  function updateExtremeWave(dt){
+    if(!gameState.extremeWaveActive) return;
+
+    gameState.extremeWaveTimer -= dt;
+    updateExtremeWaveHUD();
+
+    // Spawn continuo más agresivo cuanto menos tiempo queda
+    const spawnRate = gameState.extremeWaveTimer > 30 ? 1.2 : 0.7; // segundos entre spawns
+    if(!gameState._extremeSpawnTimer) gameState._extremeSpawnTimer = spawnRate;
+    gameState._extremeSpawnTimer -= dt;
+    if(gameState._extremeSpawnTimer <= 0){
+      gameState._extremeSpawnTimer = spawnRate + Math.random()*0.5;
+      // Spawnar 1-3 zombies a la vez
+      const count = gameState.extremeWaveTimer < 20 ? 3 : gameState.extremeWaveTimer < 40 ? 2 : 1;
+      for(let i=0;i<count;i++) spawnExtremeZombie();
+    }
+
+    if(gameState.extremeWaveTimer <= 0){
+      // ¡SUPERADO! Recompensa grande y pasar a siguiente oleada
+      endExtremeWave(true);
+    }
+  }
+
+  function endExtremeWave(survived){
+    gameState.extremeWaveActive = false;
+    gameState._extremeSpawnTimer = 0;
+    hideExtremeWaveHUD();
+
+    // Restaurar atmósfera
+    const atm = getAtmosphereForWave(gameState.wave);
+    changeAtmosphere(atm);
+
+    if(survived){
+      const bonus = 800 * (DIFFICULTY_LEVELS[gameState.difficulty]?.scoreMult || 1);
+      gameState.score += bonus;
+      playerData.totalCoins += 40;
+      gameState.hp = Math.min(gameState.maxHp, gameState.hp + 35);
+      gameState.bossKills = (gameState.bossKills||0) + 1;
+
+      inGameMessage(`🔴 ¡OLEADA EXTREMA SUPERADA! +${Math.floor(bonus)} pts · +40 💰 · +35 ❤️`, 4000);
+      showBigMessage('🏆 ¡SUPERVIVIENTE!', '#ffdd00');
+      cameraShake(0.4, 600);
+      playSound(440, 0.5, 'triangle', 0.4);
+      setTimeout(()=>playSound(660, 0.5, 'triangle', 0.35), 150);
+      setTimeout(()=>playSound(880, 0.6, 'sine', 0.4), 300);
+
+      // Mejora roguelike especial (2 cartas extra)
+      setTimeout(()=>{ showWaveUpgradePanel(gameState.wave, true); }, 1200);
+    }
+  }
+
+  function showExtremeWaveHUD(){
+    const el = document.getElementById('extremeWaveHUD');
+    if(el){ el.style.display='flex'; }
+  }
+  function hideExtremeWaveHUD(){
+    const el = document.getElementById('extremeWaveHUD');
+    if(el){ el.style.display='none'; }
+  }
+  function updateExtremeWaveHUD(){
+    const el = document.getElementById('extremeWaveCountdown');
+    if(el){
+      const s = Math.max(0, Math.ceil(gameState.extremeWaveTimer));
+      el.textContent = s;
+      el.style.color = s <= 10 ? '#ff4444' : s <= 20 ? '#ffaa00' : '#ffffff';
+    }
   }
 
   // ========== 🌊 SISTEMA ROGUELIKE ENTRE OLEADAS ==========
@@ -4036,6 +4296,10 @@
       driftBtn.addEventListener('touchstart', e=>{ e.preventDefault(); keys['shift']=true; }, {passive:false});
       driftBtn.addEventListener('touchend', ()=>{ keys['shift']=false; });
     }
+    
+    // Mostrar/ocultar controles al iniciar/terminar partida
+    const origShowHUD = window._origShowHUD;
+    const origHideHUD = window._origHideHUD;
   })();
 
   // ========== 📊 ACTUALIZAR STATS EN HUD ==========
@@ -4061,23 +4325,6 @@
     }
   }
 
-  // ========== 👹 ACTUALIZAR BOSS EN EL LOOP ==========
-  function updateBossState(){
-    if(!gameState.bossActive || !gameState.bossZombie) return;
-    // Pulso visual en los ojos
-    const boss = gameState.bossZombie;
-    const t = performance.now() * 0.005;
-    boss.traverse(child=>{
-      if(child.isMesh && child.material && child.material.color && child.material.color.r > 0.9 && child.material.color.g > 0.9){
-        // Ojos amarillos - pulsan
-        child.material.color.setHSL(0.16, 1, 0.5 + Math.sin(t)*0.3);
-      }
-    });
-    // Actualizar barra de vida del boss
-    updateBossBar();
-  }
-
-  
   (function showIntroPan(){
     const start=performance.now(), dur=1400;
     function pan(now){
