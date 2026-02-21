@@ -79,6 +79,7 @@
   const BOSS_TYPE = { name:'BOSS', color:0xff0000, speed:0.55, damage:40, points:500, coins:50, size:2.8 };
 
   // ========== TIENDA ==========
+  const SHOP_COLORS = [
     { name:'Azul Clásico',      hex:0x1f7ad2, price:0,    unlocked:true },
     { name:'Rojo Deportivo',    hex:0xff0000, price:500  },
     { name:'Verde Neón',        hex:0x00ff00, price:500  },
@@ -150,6 +151,7 @@
     // === STATS ===
     playTimeSeconds: 0,
     distanceMeters: 0,
+    bossKills: 0,
     // === ESTADO ROGUELIKE ===
     awaitingUpgrade: false,
   };
@@ -223,6 +225,7 @@
     const u = playerData.upgrades;
     gameState.maxHp = 100 + (u.maxHealth.level * u.maxHealth.bonus);
     CONFIG.MAX_SPEED = 0.48 + (u.speed.level * u.speed.bonus);
+    CONFIG.ACCELERATION = 0.018; // resetear al base en cada nueva run
   }
 
   // ========== 🎮 CALIDAD GRÁFICA ==========
@@ -4033,10 +4036,6 @@
       driftBtn.addEventListener('touchstart', e=>{ e.preventDefault(); keys['shift']=true; }, {passive:false});
       driftBtn.addEventListener('touchend', ()=>{ keys['shift']=false; });
     }
-    
-    // Mostrar/ocultar controles al iniciar/terminar partida
-    const origShowHUD = window._origShowHUD;
-    const origHideHUD = window._origHideHUD;
   })();
 
   // ========== 📊 ACTUALIZAR STATS EN HUD ==========
