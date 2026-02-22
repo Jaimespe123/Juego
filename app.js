@@ -571,8 +571,7 @@
   function updateAudioGains(){
     if(!audioCtx) return;
     audioNodes.master.gain.value = parseFloat(volMaster.value);
-    // Motor solo suena mientras se juega
-    audioNodes.engine.gain.value = gameState.running ? parseFloat(volEngine.value) : 0;
+    audioNodes.engine.gain.value = parseFloat(volEngine.value);
     audioNodes.sfx.gain.value    = parseFloat(volSfx.value);
   }
 
@@ -618,7 +617,7 @@
 
   // ========== CONTROLES DE AUDIO UI ==========
   volMaster.addEventListener('input', e=>{ elements.volMasterVal.innerText=Math.round(e.target.value*100)+'%'; updateAudioGains(); });
-  volEngine.addEventListener('input', e=>{ elements.volEngineVal.innerText=Math.round(e.target.value*100)+'%'; updateAudioGains(); }); // motor solo suena en partida
+  volEngine.addEventListener('input', e=>{ elements.volEngineVal.innerText=Math.round(e.target.value*100)+'%'; updateAudioGains(); });
   volSfx.addEventListener('input',   e=>{ elements.volSfxVal.innerText=Math.round(e.target.value*100)+'%';   updateAudioGains(); });
 
   function updateNightLightBoostDisplay(){ if(elements.nightLightBoostVal) elements.nightLightBoostVal.innerText=Math.round(elements.nightLightBoost.value*100)+'%'; }
@@ -639,11 +638,27 @@
   if(gqEl) gqEl.addEventListener('change', e=>{ applyQuality(e.target.value); });
 
   // ========== EVENTOS UI ==========
+  // Botón ⚙️ del HUD de partida (in-game) → abre settings sin tocar el menú
   elements.btnSettings.addEventListener('click', ()=>{
-    elements.settingsPanel.style.display = elements.settingsPanel.style.display==='block'?'none':'block';
+    if(gameState.running){
+      togglePause();
+    } else {
+      // Desde menú: abrir como overlay
+      overlayMenu.style.display='none';
+      elements.settingsPanel.style.display='block';
+    }
   });
-  elements.openSettings.addEventListener('click', ()=>{ elements.settingsPanel.style.display='block'; });
-  elements.closeSettings.addEventListener('click', ()=>{ elements.settingsPanel.style.display='none'; });
+  // Botón "Ajustes" del menú principal → oculta menú, muestra settings overlay
+  elements.openSettings.addEventListener('click', ()=>{
+    overlayMenu.style.display='none';
+    elements.settingsPanel.style.display='block';
+  });
+  // Botón "Volver al Menú" dentro de ajustes
+  elements.closeSettings.addEventListener('click', ()=>{
+    elements.settingsPanel.style.display='none';
+    overlayMenu.style.display='block';
+    updateMenuStats();
+  });
   if(elements.claimDailyMission) elements.claimDailyMission.addEventListener('click', claimDailyMission);
   if(elements.openTutorial) elements.openTutorial.addEventListener('click', ()=>{ overlayMenu.style.display='none'; if(elements.overlayTutorial) elements.overlayTutorial.style.display='block'; updateTutorialOverlay(); });
   if(elements.backFromTutorial) elements.backFromTutorial.addEventListener('click', ()=>{ if(elements.overlayTutorial) elements.overlayTutorial.style.display='none'; overlayMenu.style.display='block'; updateMenuStats(); });
@@ -3266,37 +3281,38 @@
     const Z0 = car ? car.position.z : 0;
     const LEN = 260, STEP = 18, N = Math.floor(LEN/STEP);
 
-    // Paredes y techo — más alto que antes (sy=12, techo a 12.5)
+    // 1) Pared continua izquierda — 1 InstancedMesh escalado
     const wallsL = [], wallsR = [], roofs = [];
     for(let i=0;i<N;i++){
       const z = Z0 - 8 - i*STEP;
-      wallsL.push({ x:-12, y:6,    z, sx:1, sy:12, sz:STEP+0.5 });
-      wallsR.push({ x: 12, y:6,    z, sx:1, sy:12, sz:STEP+0.5 });
-      roofs.push(  { x:  0, y:12.5, z, sx:26, sy:1.2, sz:STEP+0.5 });
+      wallsL.push({ x:-12, y:3.5, z, sx:1, sy:7, sz:STEP+0.5 });
+      wallsR.push({ x: 12, y:3.5, z, sx:1, sy:7, sz:STEP+0.5 });
+      roofs.push(  { x:  0, y:7.2, z, sx:26, sy:1, sz:STEP+0.5 });
     }
     const tunnelMat = new THREE.MeshStandardMaterial({ color:0x2a2a38, roughness:0.95 });
     addInstanced(new THREE.BoxGeometry(1,1,1), tunnelMat, wallsL);
     addInstanced(new THREE.BoxGeometry(1,1,1), tunnelMat, wallsR);
     addInstanced(new THREE.BoxGeometry(1,1,1), new THREE.MeshStandardMaterial({ color:0x1a1a28, roughness:1 }), roofs);
 
-    // Luces de emergencia naranja — ahora a y=11.5
+    // 2) Marcadores de techo (línea de luces de emergencia naranja) — solo 2 luces reales
+    // Las otras son falsas: objetos brillantes básicos sin luz
     const fakeLightPositions = [];
     for(let i=0;i<Math.floor(LEN/30);i++){
-      fakeLightPositions.push({ x:0, y:11.5, z:Z0-20-i*30, sx:0.4, sy:0.15, sz:0.4 });
+      fakeLightPositions.push({ x:0, y:6.5, z:Z0-20-i*30, sx:0.4, sy:0.15, sz:0.4 });
     }
     addInstanced(
       new THREE.BoxGeometry(1,1,1),
       new THREE.MeshBasicMaterial({ color:0xff8800 }),
       fakeLightPositions
     );
-    // Luces reales también más arriba
-    addZoneLight(0xff6600, 3, 50, 0, 10, Z0 - 60);
-    addZoneLight(0xff6600, 3, 50, 0, 10, Z0 - 180);
+    // Solo 2 luces reales en el túnel
+    addZoneLight(0xff6600, 3, 50, 0, 5.5, Z0 - 60);
+    addZoneLight(0xff6600, 3, 50, 0, 5.5, Z0 - 180);
 
-    // Spotlight del coche — apunta más lejos
-    const spot = new THREE.SpotLight(0xffffff, 14, 50, Math.PI/5.5, 0.3);
-    spot.position.set(0, 1.5, 2);
-    spot.target.position.set(0, -1, -25);
+    // 3) Spotlight en el coche (solo UNO, más barato)
+    const spot = new THREE.SpotLight(0xffffff, 12, 40, Math.PI/6, 0.35);
+    spot.position.set(0, 1, 1.8);
+    spot.target.position.set(0, -1, -20);
     spot.userData.isTunnelLight = true;
     if(car){ car.add(spot); car.add(spot.target); }
     zoneObjects.push(spot);
@@ -3523,7 +3539,7 @@
         assignMission();
       }
 
-      if(gameState.hp<=0){ gameState.running=false; updateAudioGains(); showGameOver(); }
+      if(gameState.hp<=0){ gameState.running=false; showGameOver(); }
 
       // Reciclar mundo infinito
       recycleWorld();
@@ -3736,7 +3752,6 @@
     if(pauseMenuBtn) pauseMenuBtn.addEventListener('click', ()=>{
       document.getElementById('pauseScreen').style.display = 'none';
       gameState.running=false; gameState.paused=false;
-      updateAudioGains(); // silenciar motor
       overlayMenu.style.display='block';
       showBackgroundCanvas(); hideHUD();
       updateMenuStats();

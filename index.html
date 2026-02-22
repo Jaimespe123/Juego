@@ -473,123 +473,100 @@
     </section>
 
     <!-- PANEL DE AJUSTES -->
-    <aside id="settingsPanel" role="dialog" aria-labelledby="settingsTitle" style="display:none">
-      <h3 id="settingsTitle">⚙️ Ajustes</h3>
-      
-      <div class="settings-group">
-        <div class="setting">
-          <label for="volMaster">
-            🔊 Volumen maestro
-            <span id="volMasterVal" class="setting-value">80%</span>
-          </label>
-          <input 
-            id="volMaster" 
-            type="range" 
-            min="0" 
-            max="1" 
-            step="0.01" 
-            value="0.8"
-            aria-valuemin="0"
-            aria-valuemax="100"
-            aria-valuenow="80">
-        </div>
-        
-        <div class="setting">
-          <label for="volEngine">
-            🏎️ Volumen motor
-            <span id="volEngineVal" class="setting-value">80%</span>
-          </label>
-          <input 
-            id="volEngine" 
-            type="range" 
-            min="0" 
-            max="1" 
-            step="0.01" 
-            value="0.8"
-            aria-valuemin="0"
-            aria-valuemax="100"
-            aria-valuenow="80">
-        </div>
-        
-        <div class="setting">
-          <label for="volSfx">
-            💥 Volumen efectos
-            <span id="volSfxVal" class="setting-value">90%</span>
-          </label>
-          <input 
-            id="volSfx" 
-            type="range" 
-            min="0" 
-            max="1" 
-            step="0.01" 
-            value="0.9"
-            aria-valuemin="0"
-            aria-valuemax="100"
-            aria-valuenow="90">
-        </div>
-        
-
-        <div class="setting">
-          <label for="steeringMode">
-            🎮 Suavizado de giro
-          </label>
-          <select id="steeringMode" class="setting-select">
-            <option value="soft">Suave</option>
-            <option value="normal" selected>Normal</option>
-            <option value="direct">Directo</option>
-          </select>
-        </div>
-
-        <div class="setting">
-          <label for="nightLightBoost">
-            🌙 Intensidad farolas
-            <span id="nightLightBoostVal" class="setting-value">120%</span>
-          </label>
-          <input
-            id="nightLightBoost"
-            type="range"
-            min="0.8"
-            max="2"
-            step="0.1"
-            value="1.2"
-            aria-valuemin="80"
-            aria-valuemax="200"
-            aria-valuenow="120">
-        </div>
-
-        <div class="setting">
-          <label for="graphicsQuality">
-            🎮 Calidad gráfica
-          </label>
-          <select id="graphicsQuality" class="setting-select">
-            <option value="ultra">Ultra ✨ — máxima calidad</option>
-            <option value="high" selected>Alto 🔥 — recomendado</option>
-            <option value="medium">Medio ⚡ — más fluido</option>
-            <option value="low">Bajo 🐢 — PCs lentos</option>
-            <option value="potato">Patata 🥔 — rendimiento máximo</option>
-          </select>
-          <p style="font-size:11px;color:var(--muted);margin-top:4px;">
-            Los modos Bajo y Patata aumentan el tamaño de píxel para ganar muchos FPS.
-          </p>
-        </div>
+    <!-- ⚙️ AJUSTES — pantalla completa como la tienda -->
+    <section id="settingsPanel" class="overlay settings-overlay" style="display:none" role="dialog" aria-labelledby="settingsTitle" aria-modal="true">
+      <div class="shop-header">
+        <h1 id="settingsTitle">⚙️ Ajustes</h1>
+        <p class="shop-subtitle">Personaliza el audio, los controles y los gráficos del juego.</p>
       </div>
-      
-      <div class="settings-actions">
-        <button class="btn" id="closeSettings">Cerrar</button>
+
+      <div class="settings-sections-grid">
+
+        <!-- AUDIO -->
+        <div class="settings-card">
+          <h2 class="settings-card-title">🔊 Audio</h2>
+          <div class="settings-group">
+            <div class="setting">
+              <label for="volMaster">🔊 Volumen maestro <span id="volMasterVal" class="setting-value">80%</span></label>
+              <input id="volMaster" type="range" min="0" max="1" step="0.01" value="0.8">
+            </div>
+            <div class="setting">
+              <label for="volEngine">🏎️ Volumen motor <span id="volEngineVal" class="setting-value">80%</span></label>
+              <input id="volEngine" type="range" min="0" max="1" step="0.01" value="0.8">
+            </div>
+            <div class="setting">
+              <label for="volSfx">💥 Volumen efectos <span id="volSfxVal" class="setting-value">90%</span></label>
+              <input id="volSfx" type="range" min="0" max="1" step="0.01" value="0.9">
+            </div>
+          </div>
+        </div>
+
+        <!-- CONTROLES -->
+        <div class="settings-card">
+          <h2 class="settings-card-title">🎮 Controles</h2>
+          <div class="settings-group">
+            <div class="setting">
+              <label for="steeringMode">🎮 Suavizado de giro</label>
+              <select id="steeringMode" class="setting-select">
+                <option value="soft">Suave</option>
+                <option value="normal" selected>Normal</option>
+                <option value="direct">Directo</option>
+              </select>
+            </div>
+          </div>
+          <div class="settings-controls-hint">
+            <p>🖱️ Ratón — dirección</p>
+            <p>⬆️ W / ↑ — acelerar</p>
+            <p>⬇️ S / ↓ — frenar</p>
+            <p>⬅️ A / ➡️ D — girar</p>
+            <p>Shift — derrape</p>
+            <p>N — nitro</p>
+            <p>Q — shockwave</p>
+            <p>F — soltar mina</p>
+            <p>ESC — pausa</p>
+          </div>
+        </div>
+
+        <!-- GRÁFICOS -->
+        <div class="settings-card">
+          <h2 class="settings-card-title">🖥️ Gráficos</h2>
+          <div class="settings-group">
+            <div class="setting">
+              <label for="graphicsQuality">🎮 Calidad gráfica</label>
+              <select id="graphicsQuality" class="setting-select">
+                <option value="ultra">Ultra ✨ — máxima calidad</option>
+                <option value="high" selected>Alto 🔥 — recomendado</option>
+                <option value="medium">Medio ⚡ — más fluido</option>
+                <option value="low">Bajo 🐢 — PCs lentos</option>
+                <option value="potato">Patata 🥔 — rendimiento máximo</option>
+              </select>
+              <p style="font-size:11px;color:var(--muted);margin-top:6px;">Los modos Bajo y Patata aumentan el tamaño de píxel para ganar FPS.</p>
+            </div>
+            <div class="setting">
+              <label for="nightLightBoost">🌙 Intensidad farolas <span id="nightLightBoostVal" class="setting-value">120%</span></label>
+              <input id="nightLightBoost" type="range" min="0.8" max="2" step="0.1" value="1.2">
+            </div>
+          </div>
+        </div>
+
+      </div><!-- /settings-sections-grid -->
+
+      <div class="shop-actions">
+        <button class="btn large" id="closeSettings">◀️ Volver al Menú</button>
       </div>
-    </aside>
+    </section>
 
     <!-- Mensaje flotante en juego -->
     <div id="inGameMsg" role="status" aria-live="polite"></div>
 
-    <!-- HUD OLEADA EXTREMA (reemplaza al boss) -->
-    <div id="extremeWaveHUD" style="display:none; position:absolute; top:18px; left:50%; transform:translateX(-50%); z-index:50; text-align:center; min-width:280px;">
-      <div style="background:rgba(80,0,0,0.88); border:2px solid #ff2244; border-radius:12px; padding:8px 20px; box-shadow:0 0 28px rgba(255,30,30,0.6); animation:bossPulse 1s ease-in-out infinite;">
-        <div style="font-size:13px; font-weight:900; color:#ff4444; letter-spacing:2px; text-shadow:0 0 10px #ff0000;">🔴 OLEADA EXTREMA 🔴</div>
-        <div style="display:flex; align-items:center; justify-content:center; gap:8px; margin-top:4px;">
-          <span style="color:#ccc; font-size:12px;">¡SOBREVIVE!</span>
-          <span id="extremeWaveCountdown" style="font-size:32px; font-weight:900; color:#ffffff; text-shadow:0 0 16px #ff0000; line-height:1;">60</span>
-          <span style="color:#ccc; font-size:12px;">seg</span>
+    <!-- BARRA DE VIDA DEL BOSS -->
+    <div id="bossHealthBar" style="display:none; position:absolute; top:18px; left:50%; transform:translateX(-50%); z-index:50; text-align:center; min-width:320px;">
+      <div id="bossName" style="font-size:14px; font-weight:900; color:#ff2244; text-shadow:0 0 12px #ff2244; letter-spacing:2px; margin-bottom:5px;">👹 ZOMBIE BOSS</div>
+      <div style="background:rgba(10,14,20,0.9); border:2px solid #ff2244; border-radius:8px; padding:4px 8px; box-shadow:0 0 20px rgba(255,34,68,0.4);">
+        <div style="background:#1a0a0a; border-radius:4px; overflow:hidden; height:20px;">
+          <div id="bossHpFill" style="height:100%; width:100%; background:linear-gradient(90deg,#ff0022,#ff6600); transition:width 0.3s ease; border-radius:4px; position:relative;">
+            <div id="bossHpText" style="position:absolute; inset:0; display:flex; align-items:center; justify-content:center; font-size:12px; font-weight:bold; color:white; text-shadow:1px 1px 2px #000;">100%</div>
+          </div>
         </div>
       </div>
     </div>

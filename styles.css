@@ -270,7 +270,7 @@ body.nitro-active .nitro-bar {
 
 /* ========== OVERLAYS ========== */
 .overlay {
-  position: absolute;
+  position: fixed;
   left: 50%;
   top: 50%;
   transform: translate(-50%, -50%);
@@ -572,25 +572,50 @@ kbd {
 }
 
 /* ========== PANEL DE AJUSTES ========== */
-#settingsPanel {
-  position: absolute;
-  right: var(--spacing-md);
-  top: 80px;
-  z-index: 45;
-  background: var(--panel);
-  padding: var(--spacing-lg);
-  border-radius: var(--radius-lg);
-  width: 320px;
-  box-shadow: var(--shadow-xl);
-  backdrop-filter: blur(10px);
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  animation: slideInRight 0.3s ease;
+/* ─── AJUSTES OVERLAY ──────────────────────────────────────── */
+.settings-overlay {
+  max-width: 820px;
+  text-align: left;
 }
 
-#settingsPanel h3 {
-  margin: 0 0 var(--spacing-lg) 0;
-  font-size: 18px;
+.settings-sections-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 1.2rem;
+  margin: 1.4rem 0;
+}
+
+.settings-card {
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(29, 185, 84, 0.18);
+  border-radius: 14px;
+  padding: 1.2rem 1.4rem;
+}
+
+.settings-card-title {
+  font-size: 14px;
+  font-weight: 700;
   color: var(--accent);
+  letter-spacing: 1px;
+  text-transform: uppercase;
+  margin: 0 0 1rem 0;
+  padding-bottom: 0.6rem;
+  border-bottom: 1px solid rgba(29, 185, 84, 0.15);
+}
+
+.settings-controls-hint {
+  margin-top: 1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.settings-controls-hint p {
+  font-size: 12px !important;
+  color: var(--muted) !important;
+  margin: 0 !important;
+  padding: 3px 0;
+  border-bottom: 1px solid rgba(255,255,255,0.04);
 }
 
 .settings-group {
@@ -988,11 +1013,8 @@ kbd {
     grid-template-columns: 1fr;
   }
 
-  #settingsPanel {
-    right: var(--spacing-sm);
-    left: var(--spacing-sm);
-    width: auto;
-    top: 60px;
+  .settings-sections-grid {
+    grid-template-columns: 1fr;
   }
 
   #footer {
@@ -1504,18 +1526,13 @@ kbd {
   height: 100%;
   background: radial-gradient(circle, rgba(255,255,255,0.3), transparent 70%);
   transform: translate(-50%, -50%) scale(0);
+  transition: transform 0.5s;
   pointer-events: none;
-  border-radius: inherit;
 }
 
 .btn-hero:active .btn-glow {
-  animation: btnGlowBurst 0.45s ease-out forwards;
-}
-
-@keyframes btnGlowBurst {
-  0%   { transform: translate(-50%, -50%) scale(0);   opacity: 1; }
-  60%  { transform: translate(-50%, -50%) scale(2.2); opacity: 0.6; }
-  100% { transform: translate(-50%, -50%) scale(2.8); opacity: 0; }
+  transform: translate(-50%, -50%) scale(2);
+  transition: none;
 }
 
 /* Grid de botones secundarios */
